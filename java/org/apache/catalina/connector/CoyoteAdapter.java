@@ -96,6 +96,7 @@ public class CoyoteAdapter implements Adapter {
     public CoyoteAdapter(Connector connector) {
 
         super();
+        // 设置连接器
         this.connector = connector;
 
     }
@@ -104,6 +105,7 @@ public class CoyoteAdapter implements Adapter {
     // ----------------------------------------------------- Instance Variables
 
 
+    // 构造函数，设置绑定了当前拥有这个适配器的 Connector
     /**
      * The CoyoteConnector with which this processor is associated.
      */

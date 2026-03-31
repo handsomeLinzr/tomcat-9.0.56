@@ -58,6 +58,7 @@ public class StandardEngine extends ContainerBase implements Engine {
     // ----------------------------------------------------------- Constructors
 
 
+    // 构造函数
     /**
      * Create a new StandardEngine component with the default basic Valve.
      */
@@ -115,6 +116,7 @@ public class StandardEngine extends ContainerBase implements Engine {
      */
     @Override
     public Realm getRealm() {
+        // 默认根据 server.xml，得到 LockOutRealm 对象
         Realm configured = super.getRealm();
         // If no set realm has been called - default to NullRealm
         // This can be overridden at engine, context and host level

@@ -137,18 +137,21 @@ public class SocketProperties {
      */
     protected Boolean soReuseAddress = null;
 
+    // 默认 false
     /**
      * SO_LINGER option, paired with the <code>soLingerTime</code> value.
      * JVM defaults used unless both attributes are set.
      */
     protected Boolean soLingerOn = null;
 
+    // 默认 -1
     /**
      * SO_LINGER option, paired with the <code>soLingerOn</code> value.
      * JVM defaults used unless both attributes are set.
      */
     protected Integer soLingerTime = null;
 
+    // 在 Http11NioProtocol 构造函数中，设置成了 60 秒
     /**
      * SO_TIMEOUT option. default is 20000.
      */
@@ -271,10 +274,13 @@ public class SocketProperties {
         }
     }
 
+    // 设置 socket 属性
     public void setProperties(AsynchronousServerSocketChannel socket) throws IOException {
+        // 设置接收缓存
         if (rxBufSize != null) {
             socket.setOption(StandardSocketOptions.SO_RCVBUF, rxBufSize);
         }
+        // 设置端口重用
         if (soReuseAddress != null) {
             socket.setOption(StandardSocketOptions.SO_REUSEADDR, soReuseAddress);
         }

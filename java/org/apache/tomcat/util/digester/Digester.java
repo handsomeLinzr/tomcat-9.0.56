@@ -60,7 +60,7 @@ import org.xml.sax.ext.EntityResolver2;
 import org.xml.sax.ext.Locator2;
 import org.xml.sax.helpers.AttributesImpl;
 
-
+// Digester 通过匹配一系列的原始规则，以执行在解析类之前处理
 /**
  * <p>A <strong>Digester</strong> processes an XML input stream by matching a
  * series of element nesting patterns to execute Rules that have been added
@@ -85,10 +85,13 @@ public class Digester extends DefaultHandler2 {
     // ---------------------------------------------------------- Static Fields
 
     protected static IntrospectionUtils.PropertySource[] propertySources;
+    // 在构造函数的时候设置为 true
     private static boolean propertySourcesSet = false;
     protected static final StringManager sm = StringManager.getManager(Digester.class);
 
+    // 静态代码块，先执行
     static {
+        // 获取属性 org.apache.tomcat.util.digester.PROPERTY_SOURCE
         String classNames = System.getProperty("org.apache.tomcat.util.digester.PROPERTY_SOURCE");
         ArrayList<IntrospectionUtils.PropertySource> sourcesList = new ArrayList<>();
         IntrospectionUtils.PropertySource[] sources = null;
@@ -115,6 +118,8 @@ public class Digester extends DefaultHandler2 {
             propertySources = sources;
             propertySourcesSet = true;
         }
+        // 判断如果设置了属性 org.apache.tomcat.util.digester.REPLACE_SYSTEM_PROPERTIES 为 true
+        // 则进行系统变量替换
         if (Boolean.getBoolean("org.apache.tomcat.util.digester.REPLACE_SYSTEM_PROPERTIES")) {
             replaceSystemProperties();
         }
@@ -184,6 +189,7 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // 默认赋值 new SystemPropertySource()
     protected IntrospectionUtils.PropertySource[] source;
 
 
@@ -220,6 +226,7 @@ public class Digester extends DefaultHandler2 {
     protected ClassLoader classLoader = null;
 
 
+    // 已经配置了后，configured 就会被设置为 true
     /**
      * Has this Digester been configured yet.
      */
@@ -245,6 +252,7 @@ public class Digester extends DefaultHandler2 {
     protected ErrorHandler errorHandler = null;
 
 
+    // SAXParser 工厂
     /**
      * The SAXParserFactory that is created the first time we need it.
      */
@@ -286,6 +294,7 @@ public class Digester extends DefaultHandler2 {
     protected ArrayStack<Object> params = new ArrayStack<>();
 
 
+    // 对应的 SAXParser
     /**
      * The SAXParser we will use to parse the input stream.
      */
@@ -305,6 +314,7 @@ public class Digester extends DefaultHandler2 {
     protected XMLReader reader = null;
 
 
+    // 栈底对象，就是栈第一个对象
     /**
      * The "root" element of the stack (in other words, the last object
      * that was popped.
@@ -312,6 +322,7 @@ public class Digester extends DefaultHandler2 {
     protected Object root = null;
 
 
+    // RulesBase
     /**
      * The <code>Rules</code> implementation containing our collection of
      * <code>Rule</code> instances and associated matching policy.  If not
@@ -320,12 +331,15 @@ public class Digester extends DefaultHandler2 {
      */
     protected Rules rules = null;
 
+    // 定义一个栈空间
     /**
      * The object stack being constructed.
      */
     protected ArrayStack<Object> stack = new ArrayStack<>();
 
 
+    // catalina.load 方法中已经设置了 true
+    // 当加载 class 去实例化一个新对象时候，是否需要用这个 Context 类加载器
     /**
      * Do we want to use the Context ClassLoader when loading classes
      * for instantiating new objects.  Default is <code>false</code>.
@@ -333,24 +347,31 @@ public class Digester extends DefaultHandler2 {
     protected boolean useContextClassLoader = false;
 
 
+    // 是否需要验证解析器，
+    // 在 createStartDigester 中设置了 false
     /**
      * Do we want to use a validating parser.
      */
     protected boolean validating = false;
 
 
+    // 缺少属性和元素时警告
+    // 在 createStartDigester 中设置了 true
     /**
      * Warn on missing attributes and elements.
      */
     protected boolean rulesValidation = false;
 
 
+    // 属性映射
+    // 在 catalina.load 方法中，设置了这个属性，内部添加了 className、source、portOffset
     /**
      * Fake attributes map (attributes are often used for object creation).
      */
     protected Map<Class<?>, List<String>> fakeAttributes = null;
 
 
+    // 在 configure 方法中，给 log 和 saxLog 赋值
     /**
      * The Log to which most logging calls will be made.
      */
@@ -379,8 +400,10 @@ public class Digester extends DefaultHandler2 {
             }
         }
         if (!systemPropertySourceFound) {
+            // 添加进去一个空的 SystemPropertySource
             sourcesList.add(new SystemPropertySource());
         }
+        // 赋值给 source
         source = sourcesList.toArray(new IntrospectionUtils.PropertySource[0]);
     }
 
@@ -482,6 +505,7 @@ public class Digester extends DefaultHandler2 {
             return this.classLoader;
         }
         if (this.useContextClassLoader) {
+            // catalinaLoader，因为在加载后已经设置到 Thread 中
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
             if (classLoader != null) {
                 return classLoader;
@@ -542,6 +566,7 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // SAX 解析器的工厂方法
     /**
      * SAX parser factory method.
      * @return the SAXParserFactory we will use, creating one if necessary.
@@ -553,8 +578,11 @@ public class Digester extends DefaultHandler2 {
             ParserConfigurationException {
 
         if (factory == null) {
+
+            // 反射创建 com.sun.org.apache.xerces.internal.jaxp.SAXParserFactoryImpl
             factory = SAXParserFactory.newInstance();
 
+            // 设置属性
             factory.setNamespaceAware(namespaceAware);
             // Preserve xmlns attributes
             if (namespaceAware) {
@@ -692,6 +720,7 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // 返回 SAXParser 解析器
     /**
      * @return the SAXParser we will use to parse the input stream.  If there
      * is a problem creating the parser, return <code>null</code>.
@@ -704,6 +733,7 @@ public class Digester extends DefaultHandler2 {
         }
 
         // Create a new parser
+        // 创建一个新的 xml 解析器
         try {
             parser = getFactory().newSAXParser();
         } catch (Exception e) {
@@ -867,6 +897,7 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // 返回一个用于解析文件的 xml 解析器
     /**
      * Return the XMLReader to be used for parsing the input document.
      *
@@ -877,9 +908,11 @@ public class Digester extends DefaultHandler2 {
      */
     public XMLReader getXMLReader() throws SAXException {
         if (reader == null) {
+            // 都一次进来，reader 是空的，需要创建 xml 解析器
             reader = getParser().getXMLReader();
         }
 
+        // 设置回调是自己
         reader.setDTDHandler(this);
         reader.setContentHandler(this);
 
@@ -1217,6 +1250,8 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // 因为 Digester 实现了 ContentHandler，且设置了解析器的回调处理是当前对象
+    // 所以解析后会回来到这里调用这个方法
     /**
      * Process notification of the start of an XML element being reached.
      *
@@ -1239,13 +1274,16 @@ public class Digester extends DefaultHandler2 {
             saxLog.debug("startElement(" + namespaceURI + "," + localName + "," + qName + ")");
         }
 
+        // 解析系统配置
         // Parse system properties
         list = updateAttributes(list);
 
+        // 将当前的 bodyText 推到 bodyTexts 中，同时清空 bodyText
         // Save the body text accumulated for our surrounding element
         bodyTexts.push(bodyText);
         bodyText = new StringBuilder();
 
+        // 实际的元素名称 attributeName
         // the actual element name is either in localName or qName, depending
         // on whether the parser is namespace aware
         String name = localName;
@@ -1264,6 +1302,7 @@ public class Digester extends DefaultHandler2 {
             log.debug("  New match='" + match + "'");
         }
 
+        // 先开始匹配并处理规则的事件
         // Fire "begin" events for all relevant rules
         List<Rule> rules = getRules().match(namespaceURI, match);
         matches.push(rules);
@@ -1274,6 +1313,9 @@ public class Digester extends DefaultHandler2 {
                     if (debug) {
                         log.debug("  Fire begin() for " + rule);
                     }
+                    // 调用注册的事件方法
+                    //     1. Server 标签，ObjectCreateRule -> org.apache.catalina.core.StandardServer
+                    //     2. Server 标签， SetNextRule -> setServer
                     rule.begin(namespaceURI, name, list);
                 } catch (Exception e) {
                     log.error(sm.getString("digester.error.begin"), e);
@@ -1521,6 +1563,7 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // 用当前 Digester 给输入流解析这个输入流
     /**
      * Parse the content of the specified input source using this Digester.
      * Returns the root element from the object stack (if any).
@@ -1531,8 +1574,11 @@ public class Digester extends DefaultHandler2 {
      * @exception SAXException if a parsing exception occurs
      */
     public Object parse(InputSource input) throws IOException, SAXException {
+        // 配置
         configure();
+        // 获取 xml 解析读取器，解析 server.xml
         getXMLReader().parse(input);
+        // 返回栈底对象，也就是推进来的 catalina
         return root;
     }
 
@@ -1597,7 +1643,9 @@ public class Digester extends DefaultHandler2 {
      */
     public void addRule(String pattern, Rule rule) {
 
+        // 设置 rule 和当前的 Digester 关联
         rule.setDigester(this);
+        // 给当前 Digester 的规则中，添加新规则
         getRules().add(pattern, rule);
 
     }
@@ -1689,6 +1737,7 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // 对特殊的参数添加一个对象创建规则
     /**
      * Add an "object create" rule for the specified parameters.
      *
@@ -1731,6 +1780,7 @@ public class Digester extends DefaultHandler2 {
      */
     public void addSetProperties(String pattern) {
 
+        // 添加新规则对应 SetPropertiesRule
         addRule(pattern, new SetPropertiesRule());
 
     }
@@ -1824,6 +1874,7 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // 将一个新的对象推到栈顶端
     /**
      * Push a new object onto the top of the object stack.
      *
@@ -1857,6 +1908,7 @@ public class Digester extends DefaultHandler2 {
     // ------------------------------------------------------ Protected Methods
 
 
+    // 给 Digester 实例提供一个懒配置的钩子回调函数
     /**
      * <p>
      * Provide a hook for lazy configuration of this <code>Digester</code>
@@ -1870,11 +1922,13 @@ public class Digester extends DefaultHandler2 {
      */
     protected void configure() {
 
+        // 如果已经配置了，直接返回，避免重复配置
         // Do not configure more than once
         if (configured) {
             return;
         }
 
+        // 获取日志记录器
         log = LogFactory.getLog("org.apache.tomcat.util.digester.Digester");
         saxLog = LogFactory.getLog("org.apache.tomcat.util.digester.Digester.sax");
 
@@ -2012,6 +2066,7 @@ public class Digester extends DefaultHandler2 {
     // ------------------------------------------------------- Private Methods
 
 
+    // 返回一个属性 list，包含了所有的属性解析在里边
    /**
      * Returns an attributes list which contains all the attributes
      * passed in, with any text of form "${xxx}" in an attribute value
@@ -2028,12 +2083,14 @@ public class Digester extends DefaultHandler2 {
         for (int i = 0; i < nAttributes; ++i) {
             String value = newAttrs.getValue(i);
             try {
+                // 设置解析值
                 newAttrs.setValue(i, IntrospectionUtils.replaceProperties(value, null, source, getClassLoader()).intern());
             } catch (Exception e) {
                 log.warn(sm.getString("digester.failedToUpdateAttributes", newAttrs.getLocalName(i), value), e);
             }
         }
 
+        // 返回解析的结果数据
         return newAttrs;
     }
 

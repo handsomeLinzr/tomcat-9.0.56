@@ -35,12 +35,14 @@ public final class SecurityConfig{
     private static final Log log = LogFactory.getLog(SecurityConfig.class);
 
 
+    // 默认的 packageAccess 设置
     private static final String PACKAGE_ACCESS =  "sun.,"
                                                 + "org.apache.catalina."
                                                 + ",org.apache.jasper."
                                                 + ",org.apache.coyote."
                                                 + ",org.apache.tomcat.";
 
+    // 默认的配置 packageDefinition
     // FIX ME package "javax." was removed to prevent HotSpot
     // fatal internal errors
     private static final String PACKAGE_DEFINITION= "java.,sun."
@@ -48,18 +50,22 @@ public final class SecurityConfig{
                                                 + ",org.apache.coyote."
                                                 + ",org.apache.tomcat."
                                                 + ",org.apache.jasper.";
+    // 构造函数设置
+    // 配置属性 package.definition
     /**
      * List of protected package from conf/catalina.properties
      */
     private final String packageDefinition;
 
-
+    // 构造函数设置
+    // 配置属性 package.access
     /**
      * List of protected package from conf/catalina.properties
      */
     private final String packageAccess;
 
 
+    // 创建 SecurityConfig 类
     /**
      * Create a single instance of this class.
      */
@@ -67,6 +73,7 @@ public final class SecurityConfig{
         String definition = null;
         String access = null;
         try{
+            // 获取配置
             definition = CatalinaProperties.getProperty("package.definition");
             access = CatalinaProperties.getProperty("package.access");
         } catch (java.lang.Exception ex){
@@ -74,12 +81,14 @@ public final class SecurityConfig{
                 log.debug("Unable to load properties using CatalinaProperties", ex);
             }
         } finally {
+            // 给配置赋值
             packageDefinition = definition;
             packageAccess = access;
         }
     }
 
 
+    // 单例创建
     /**
      * Returns the singleton instance of that class.
      * @return an instance of that class.

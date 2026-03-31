@@ -934,11 +934,13 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             }
 
             for (;;) {
+                // 如果当前的 worker 线程数量达到核心线程数/最大线程数，则直接返回 false
                 if (workerCountOf(c)
                     >= ((core ? corePoolSize : maximumPoolSize) & COUNT_MASK)) {
                     return false;
                 }
                 if (compareAndIncrementWorkerCount(c)) {
+                    // 对线程数量自旋自增成功，则跳出 retry 循环
                     break retry;
                 }
                 c = ctl.get();  // Re-read ctl
@@ -954,7 +956,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         boolean workerAdded = false;
         Worker w = null;
         try {
+            // 新创建一个 worker 线程包装
             w = new Worker(firstTask);
+            // 获取对应的 worker 的线程
             final Thread t = w.thread;
             if (t != null) {
                 final ReentrantLock mainLock = this.mainLock;
@@ -965,15 +969,21 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                     // shut down before lock acquired.
                     int c = ctl.get();
 
+                    // 判断状态
                     if (isRunning(c) ||
                         (runStateLessThan(c, STOP) && firstTask == null)) {
                         if (t.getState() != Thread.State.NEW) {
                             throw new IllegalThreadStateException();
                         }
+                        // 将当前新创建的 worker 添加到 workers 中
+                        // workers 就是当前执行器的所有 worker 的集合
                         workers.add(w);
+                        // 标识 worker 新增成功
                         workerAdded = true;
+                        // 获取当前的 worker 数量
                         int s = workers.size();
                         if (s > largestPoolSize) {
+                            // 判断如果当前线程的数量比记录的最大线程数大，则记录当前的最大线程数量
                             largestPoolSize = s;
                         }
                     }
@@ -981,6 +991,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                     mainLock.unlock();
                 }
                 if (workerAdded) {
+                    // 如果 worker 新增成功，则调用 start 启动这个线程
                     t.start();
                     workerStarted = true;
                 }
@@ -1718,6 +1729,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      */
     public int prestartAllCoreThreads() {
         int n = 0;
+        // 添加核心线程，并启动
         while (addWorker(null, true)) {
             ++n;
         }

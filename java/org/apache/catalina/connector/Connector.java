@@ -72,6 +72,7 @@ public class Connector extends LifecycleMBeanBase  {
 
     // ------------------------------------------------------------ Constructor
 
+    // 默认用 http1.1协议
     /**
      * Defaults to using HTTP/1.1 NIO implementation.
      */
@@ -80,17 +81,20 @@ public class Connector extends LifecycleMBeanBase  {
     }
 
 
+    // 构造函数
     public Connector(String protocol) {
         boolean apr = AprStatus.getUseAprConnector() && AprStatus.isInstanceCreated()
                 && AprLifecycleListener.isAprAvailable();
         ProtocolHandler p = null;
         try {
+            // 创建 ProtocolHandler，协议处理器，默认是 Http11NioProtocol
             p = ProtocolHandler.create(protocol, apr);
         } catch (Exception e) {
             log.error(sm.getString(
                     "coyoteConnector.protocolHandlerInstantiationFailed"), e);
         }
         if (p != null) {
+            // Http11NioProtocol
             protocolHandler = p;
             protocolHandlerClassName = protocolHandler.getClass().getName();
         } else {
@@ -240,6 +244,7 @@ public class Connector extends LifecycleMBeanBase  {
     protected boolean useIPVHosts = false;
 
 
+    // 默认和 protocolHandler 一起设置，对应的是 Http11NioProtocol 的类名
     /**
      * Coyote Protocol handler class name.
      * See {@link #Connector()} for current default.
@@ -247,12 +252,14 @@ public class Connector extends LifecycleMBeanBase  {
     protected final String protocolHandlerClassName;
 
 
+    // 在构造函数的时候，创建并设置了协议处理器，默认是 http1.1，对应的是 Http11NioProtocol
     /**
      * Coyote protocol handler.
      */
     protected final ProtocolHandler protocolHandler;
 
 
+    // init 方法设置了 CoyoteAdapter 适配器
     /**
      * Coyote adapter.
      */
@@ -1011,10 +1018,13 @@ public class Connector extends LifecycleMBeanBase  {
                     sm.getString("coyoteConnector.protocolHandlerInstantiationFailed"));
         }
 
+        // 适配器，解析协议用
         // Initialize adapter
         adapter = new CoyoteAdapter(this);
+        // 设置适配器，设置协议适配器
         protocolHandler.setAdapter(adapter);
         if (service != null) {
+            // 给协议处理器设置公共线程池，用的和 server 的公共线程池
             protocolHandler.setUtilityExecutor(service.getServer().getUtilityExecutor());
         }
 
@@ -1043,6 +1053,7 @@ public class Connector extends LifecycleMBeanBase  {
         }
 
         try {
+            // 初始化协议处理器
             protocolHandler.init();
         } catch (Exception e) {
             throw new LifecycleException(

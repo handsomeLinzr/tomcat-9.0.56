@@ -237,8 +237,10 @@ public interface ProtocolHandler {
                 || (!apr && org.apache.coyote.http11.Http11NioProtocol.class.getName().equals(protocol))
                 || (apr && org.apache.coyote.http11.Http11AprProtocol.class.getName().equals(protocol))) {
             if (apr) {
+                // arp 协议
                 return new org.apache.coyote.http11.Http11AprProtocol();
             } else {
+                // http1.1协议
                 return new org.apache.coyote.http11.Http11NioProtocol();
             }
         } else if ("AJP/1.3".equals(protocol)

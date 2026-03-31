@@ -59,15 +59,23 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
     private final CompressionConfig compressionConfig = new CompressionConfig();
 
 
+    // 构造函数
     public AbstractHttp11Protocol(AbstractEndpoint<S,?> endpoint) {
+        // 调用父类
         super(endpoint);
+        // 默认 60000 毫秒，也就是 60 秒
         setConnectionTimeout(Constants.DEFAULT_CONNECTION_TIMEOUT);
+        // 创建处理器，传了 this 当前对象
         ConnectionHandler<S> cHandler = new ConnectionHandler<>(this);
+        // 设置处理器 ConnectionHandler
         setHandler(cHandler);
+        // 得到的就是上边的 endpoint， 这里默认得到的是 NioEndpoint
+        // 设置端点的处理器是 cHandler，也就是 ConnectionHandler
         getEndpoint().setHandler(cHandler);
     }
 
 
+    // 抽象类，初始化
     @Override
     public void init() throws Exception {
         // Upgrade protocols have to be configured first since the endpoint
@@ -77,6 +85,7 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
             configureUpgradeProtocol(upgradeProtocol);
         }
 
+        // 调用父类初始化
         super.init();
 
         // Set the Http11Protocol (i.e. this) for any upgrade protocols once

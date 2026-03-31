@@ -36,6 +36,7 @@ public class TaskQueue extends LinkedBlockingQueue<Runnable> {
     protected static final StringManager sm = StringManager.getManager(TaskQueue.class);
     private static final int DEFAULT_FORCED_REMAINING_CAPACITY = -1;
 
+    // 对应在执行当前队列任务的线程池，通过调用 setParent 传入
     private transient volatile ThreadPoolExecutor parent = null;
 
     // No need to be volatile. This is written and read in a single thread

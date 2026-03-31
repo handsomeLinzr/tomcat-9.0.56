@@ -962,6 +962,7 @@ public class NamingResourcesImpl extends LifecycleMBeanBase
         // timing issues. Duplication registration is not an issue.
         resourceRequireExplicitRegistration = true;
 
+        // 遍历全局资源处理
         for (ContextResource cr : resources.values()) {
             try {
                 MBeanUtils.createMBean(cr);

@@ -41,12 +41,14 @@ public abstract class LifecycleBase implements Lifecycle {
     private static final StringManager sm = StringManager.getManager(LifecycleBase.class);
 
 
+    // 生命周期的监听器
     /**
      * The list of registered LifecycleListeners for event notifications.
      */
     private final List<LifecycleListener> lifecycleListeners = new CopyOnWriteArrayList<>();
 
 
+    // 声明周期状态，默认是 NEW
     /**
      * The current state of the source component.
      */
@@ -84,6 +86,7 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    // 添加生命周期监听器
     /**
      * {@inheritDoc}
      */
@@ -93,6 +96,7 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    // 获取监听器
     /**
      * {@inheritDoc}
      */
@@ -111,6 +115,7 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    // 触发生命周期时间处理
     /**
      * Allow sub classes to fire {@link Lifecycle} events.
      *
@@ -118,20 +123,32 @@ public abstract class LifecycleBase implements Lifecycle {
      * @param data  Data associated with event.
      */
     protected void fireLifecycleEvent(String type, Object data) {
+        // 根据生命周期类型和数据，封装 LifecycleEvent
         LifecycleEvent event = new LifecycleEvent(this, type, data);
+        // 遍历所有的监听器，处理事件
         for (LifecycleListener listener : lifecycleListeners) {
             listener.lifecycleEvent(event);
         }
     }
 
 
+    // init 初始化
+    // 1.设置初始化前状态
+    // 2.调用子类进行初始化
+    // 3.设置初始化后状态
     @Override
     public final synchronized void init() throws LifecycleException {
         if (!state.equals(LifecycleState.NEW)) {
+            // 如果当前的状态不是 NEW 状态，抛出异常，因为非 NEW 状态不能调用 init 方法
+            // 只有 NEW 状态能调用 init 方法
             invalidTransition(Lifecycle.BEFORE_INIT_EVENT);
         }
 
         try {
+            // 生命周期流转过程
+            // 先设置 INITIALIZING
+            // 然后调用 initInternal
+            // 最后设置 INITIALIZED
             setStateInternal(LifecycleState.INITIALIZING, null, false);
             initInternal();
             setStateInternal(LifecycleState.INITIALIZED, null, false);
@@ -150,12 +167,14 @@ public abstract class LifecycleBase implements Lifecycle {
     protected abstract void initInternal() throws LifecycleException;
 
 
+    // 启动的模板方法
     /**
      * {@inheritDoc}
      */
     @Override
     public final synchronized void start() throws LifecycleException {
 
+        // 判断如果当前状态是已经启动的状态，则输出日志，直接返回
         if (LifecycleState.STARTING_PREP.equals(state) || LifecycleState.STARTING.equals(state) ||
                 LifecycleState.STARTED.equals(state)) {
 
@@ -169,27 +188,36 @@ public abstract class LifecycleBase implements Lifecycle {
             return;
         }
 
+        // 过程状态判断
         if (state.equals(LifecycleState.NEW)) {
+            // 如果是 NEW 状态，则先调 init 初始化
             init();
         } else if (state.equals(LifecycleState.FAILED)) {
+            // 如果是 FAILED 失败状态，则调用 stop 停止
             stop();
         } else if (!state.equals(LifecycleState.INITIALIZED) &&
                 !state.equals(LifecycleState.STOPPED)) {
             invalidTransition(Lifecycle.BEFORE_START_EVENT);
         }
 
+        // 这里才是通常情况下走的 start 逻辑
         try {
+            // 设置状态为 STARTING_PREP，开始前
             setStateInternal(LifecycleState.STARTING_PREP, null, false);
+            // 调用子类重新的 startInternal 方法，进行自定义 start 处理
             startInternal();
             if (state.equals(LifecycleState.FAILED)) {
+                // 如果 start 后，状态变成 FAILED 失败状态，则调用 stop 停止
                 // This is a 'controlled' failure. The component put itself into the
                 // FAILED state so call stop() to complete the clean-up.
                 stop();
             } else if (!state.equals(LifecycleState.STARTING)) {
+                // 如果不是 STARTING，则进行校验
                 // Shouldn't be necessary but acts as a check that sub-classes are
                 // doing what they are supposed to.
                 invalidTransition(Lifecycle.AFTER_START_EVENT);
             } else {
+                // 正常情况下走这里，设置成 STARTED 启动完成
                 setStateInternal(LifecycleState.STARTED, null, false);
             }
         } catch (Throwable t) {
@@ -200,6 +228,7 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    // 子类实现，start 方法调用
     /**
      * Sub-classes must ensure that the state is changed to
      * {@link LifecycleState#STARTING} during the execution of this method.
@@ -326,6 +355,7 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    // 销毁
     /**
      * Sub-classes implement this method to perform any instance destruction
      * required.
@@ -335,6 +365,7 @@ public abstract class LifecycleBase implements Lifecycle {
     protected abstract void destroyInternal() throws LifecycleException;
 
 
+    // 获取状态
     /**
      * {@inheritDoc}
      */
@@ -344,6 +375,7 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    // 状态名称
     /**
      * {@inheritDoc}
      */
@@ -353,6 +385,7 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    //设置状态，调用 setStateInternal 更新
     /**
      * Provides a mechanism for sub-classes to update the component state.
      * Calling this method will automatically fire any associated
@@ -367,6 +400,7 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    // 设置状态，重载
     /**
      * Provides a mechanism for sub-classes to update the component state.
      * Calling this method will automatically fire any associated
@@ -383,18 +417,24 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    // 1.设置状态
+    // 2.触发监听事件
     private synchronized void setStateInternal(LifecycleState state, Object data, boolean check)
             throws LifecycleException {
 
+        // 日志
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("lifecycleBase.setState", this, state));
         }
 
+        // 判断如果需要检查状态
         if (check) {
             // Must have been triggered by one of the abstract methods (assume
             // code in this class is correct)
             // null is never a valid state
+            // 判断如果没有传状态，null 则一定不是一个有效的状态
             if (state == null) {
+                // 抛异常，返回
                 invalidTransition("null");
                 // Unreachable code - here to stop eclipse complaining about
                 // a possible NPE further down the method
@@ -402,9 +442,11 @@ public abstract class LifecycleBase implements Lifecycle {
             }
 
             // Any method can transition to failed
+            // 任何方法都可以转为失败
             // startInternal() permits STARTING_PREP to STARTING
-            // stopInternal() permits STOPPING_PREP to STOPPING and FAILED to
-            // STOPPING
+            // startInternal 转换 STARTING_PREP 到 STARTING
+            // stopInternal() permits STOPPING_PREP to STOPPING and FAILED to STOPPING
+            // stopInternal 方法转换 STOPPING_PREP 到 STOPPING 获取 FAILED 到 STOPPING
             if (!(state == LifecycleState.FAILED ||
                     (this.state == LifecycleState.STARTING_PREP &&
                             state == LifecycleState.STARTING) ||
@@ -413,24 +455,31 @@ public abstract class LifecycleBase implements Lifecycle {
                     (this.state == LifecycleState.FAILED &&
                             state == LifecycleState.STOPPING))) {
                 // No other transition permitted
+                // 其他情况抛异常
                 invalidTransition(state.name());
             }
         }
 
+        // 转换状态，改为新状态
         this.state = state;
+        // 获取状态对应的声明周期
         String lifecycleEvent = state.getLifecycleEvent();
         if (lifecycleEvent != null) {
+            // 如果生命周期不为空（只有 NEW 和 FAILED 才会为空）
+            // 触发生命周期事件
             fireLifecycleEvent(lifecycleEvent, data);
         }
     }
 
 
+    // 异常
     private void invalidTransition(String type) throws LifecycleException {
         String msg = sm.getString("lifecycleBase.invalidTransition", type, toString(), state);
         throw new LifecycleException(msg);
     }
 
 
+    // 处理子类异常
     private void handleSubClassException(Throwable t, String key, Object... args) throws LifecycleException {
         setStateInternal(LifecycleState.FAILED, null, false);
         ExceptionUtils.handleThrowable(t);

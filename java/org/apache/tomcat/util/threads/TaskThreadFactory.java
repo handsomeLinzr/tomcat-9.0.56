@@ -35,12 +35,18 @@ public class TaskThreadFactory implements ThreadFactory {
     private final boolean daemon;
     private final int threadPriority;
 
+    /**
+     * tomcat 中任务线程池工厂
+     * @param namePrefix
+     * @param daemon
+     * @param priority
+     */
     public TaskThreadFactory(String namePrefix, boolean daemon, int priority) {
         SecurityManager s = System.getSecurityManager();
-        group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
-        this.namePrefix = namePrefix;
-        this.daemon = daemon;
-        this.threadPriority = priority;
+        group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();   // 线程组是当前线程组
+        this.namePrefix = namePrefix;  // 前缀名称
+        this.daemon = daemon;          // 守护线程
+        this.threadPriority = priority;   // 线程优先级
     }
 
     @Override

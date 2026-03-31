@@ -85,16 +85,19 @@ public class Catalina {
 
     // ----------------------------------------------------- Instance Variables
 
+    // 启动 Bootstrap 后，start 命令中会被反射设置为 true
     /**
      * Use await.
      */
     protected boolean await = false;
 
+    // 配置文件，默认是 conf/server.xml
     /**
      * Pathname to the server configuration file.
      */
     protected String configFile = SERVER_XML;
 
+    // 设置父类加载器是 Catalina 类对应类的类加载器 sharedLoader
     // XXX Should be moved to embedded
     /**
      * The shared extensions class loader for this server.
@@ -127,6 +130,7 @@ public class Catalina {
     protected boolean useNaming = true;
 
 
+    // 启动标识，避免重复加载启动
     /**
      * Prevent duplicate loads.
      */
@@ -165,8 +169,11 @@ public class Catalina {
 
     // ----------------------------------------------------------- Constructors
 
+    // 构造函数
     public Catalina() {
+        // 设置 security 配属属性相关
         setSecurityProtection();
+        // 默认无操作
         ExceptionUtils.preload();
     }
 
@@ -233,6 +240,8 @@ public class Catalina {
     }
 
 
+    // 设置共享的外部类加载器
+    // 在 Bootstrap.init 方法中，通过反射调用，设置了类加载器 sharedLoader
     /**
      * Set the shared extensions class loader.
      *
@@ -276,6 +285,7 @@ public class Catalina {
         this.useNaming = useNaming;
     }
 
+    // 被 Bootstrap 反射设置为 true
     public void setAwait(boolean b) {
         await = b;
     }
@@ -287,6 +297,7 @@ public class Catalina {
     // ------------------------------------------------------ Protected Methods
 
 
+    // 处理指定的命令行参数
     /**
      * Process the specified command line arguments.
      *
@@ -322,6 +333,7 @@ public class Catalina {
                 usage();
                 return false;
             } else if (arg.equals("start")) {
+                // 启动，设置 isGenerateCode 生成代码标识为 false
                 isGenerateCode = false;
                 // NOOP
             } else if (arg.equals("configtest")) {
@@ -343,6 +355,7 @@ public class Catalina {
     }
 
 
+    // 定义一个文件 fd，指向配置文件 server.xml
     /**
      * Return a File object representing our configuration file.
      * @return the main configuration file
@@ -358,36 +371,56 @@ public class Catalina {
     }
 
 
+    // 创建并启动 Digester
+    // 添加了一系列的规则
     /**
      * Create and configure the Digester we will be using for startup.
      * @return the main digester to parse server.xml
      */
     protected Digester createStartDigester() {
         // Initialize the digester
+        // 初始化 Digester
         Digester digester = new Digester();
+        // 设置校验 false
         digester.setValidating(false);
+        // 设置需要规则验证
         digester.setRulesValidation(true);
+
+        // 用来存解析到的结果
         Map<Class<?>, List<String>> fakeAttributes = new HashMap<>();
+
+        // 添加 className
         // Ignore className on all elements
         List<String> objectAttrs = new ArrayList<>();
+        // 添加 className 标签
         objectAttrs.add("className");
         fakeAttributes.put(Object.class, objectAttrs);
+
+        // 添加 source
         // Ignore attribute added by Eclipse for its internal tracking
         List<String> contextAttrs = new ArrayList<>();
         contextAttrs.add("source");
         fakeAttributes.put(StandardContext.class, contextAttrs);
+
+        // 添加 portOffset
         // Ignore Connector attribute used internally but set on Server
         List<String> connectorAttrs = new ArrayList<>();
         connectorAttrs.add("portOffset");
         fakeAttributes.put(Connector.class, connectorAttrs);
+
+        // 设置属性 fakeAttributes
         digester.setFakeAttributes(fakeAttributes);
         digester.setUseContextClassLoader(true);
 
+        // 配置需要使用的类
         // Configure the actions we will be using
+        // 添加新的规则 ObjectCreateRule
         digester.addObjectCreate("Server",
                                  "org.apache.catalina.core.StandardServer",
                                  "className");
+        // 添加新的规则 SetPropertiesRule
         digester.addSetProperties("Server");
+        // 添加新的规则 SetNextRule
         digester.addSetNext("Server",
                             "setServer",
                             "org.apache.catalina.Server");
@@ -549,15 +582,25 @@ public class Catalina {
     }
 
 
+    /**
+     * 解析 server.xml
+     * @param start 默认传 true
+     */
     protected void parseServerXml(boolean start) {
+        // 设置配置源
         // Set configuration source
+        // getConfigFile ->> conf/server.xml
+        // 设置配置文件源
         ConfigFileLoader.setSource(new CatalinaBaseConfigurationSource(Bootstrap.getCatalinaBaseFile(), getConfigFile()));
+        // 指向 conf/server.xml 文件
         File file = configFile();
 
         if (useGeneratedCode && !Digester.isGeneratedCodeLoaderSet()) {
+            // 源码编译
             // Load loader
             String loaderClassName = generatedCodePackage + ".DigesterGeneratedCodeLoader";
             try {
+                // 源码编码器
                 Digester.GeneratedCodeLoader loader = (Digester.GeneratedCodeLoader)
                         Catalina.class.getClassLoader().loadClass(loaderClassName).getDeclaredConstructor().newInstance();
                 Digester.setGeneratedCodeLoader(loader);
@@ -603,17 +646,24 @@ public class Catalina {
         if (serverXml != null) {
             serverXml.load(this);
         } else {
+            // 获取到 server.xml 文件 resource
             try (ConfigurationSource.Resource resource = ConfigFileLoader.getSource().getServerXml()) {
                 // Create and execute our Digester
+                // 创建并启动外部 Digester，这里先默认 start = true
+                // 在 Digester 中添加了很多的规则，比如 server 那些
                 Digester digester = start ? createStartDigester() : createStopDigester();
+
+                // 获取 server.xml 文件的输入流
                 InputStream inputStream = resource.getInputStream();
                 InputSource inputSource = new InputSource(resource.getURI().toURL().toString());
                 inputSource.setByteStream(inputStream);
+                // 将当前的 catalina 推到 digester 栈顶
                 digester.push(this);
                 if (generateCode) {
                     digester.startGeneratingCode();
                     generateClassHeader(digester, start);
                 }
+                // 解析 server.xml 输入流
                 digester.parse(inputSource);
                 if (generateCode) {
                     generateClassFooter(digester);
@@ -688,39 +738,54 @@ public class Catalina {
     }
 
 
+    // 启动一个 server 实例
     /**
      * Start a new server instance.
      */
     public void load() {
 
         if (loaded) {
+            // 判断假如已经加载了，则直接返回
             return;
         }
+        // 设置加载标识为 true，下次则不会重复加载
         loaded = true;
 
+        // 当前时间
         long t1 = System.nanoTime();
 
+        // 初始化文件目录，默认空实现
+        // tomcat10将要移除
         initDirs();
 
+        // 设置 naming 相关的系统配置变量
         // Before digester - it may be needed
         initNaming();
 
+        // 解析 server.xml 文件，server.xml 就是为了启动 server 实例的
         // Parse main server.xml
+        // 走完这里，其实已经创建了一个 Server 对象，并且已经调用 setServer 设置进去了
         parseServerXml(true);
+        // 获取 server 实例，StandardServer
         Server s = getServer();
         if (s == null) {
             return;
         }
 
+        // 设置对应 server 的关联 catalina 是当前对象
         getServer().setCatalina(this);
+        // 设置对应的 catalina 路径
         getServer().setCatalinaHome(Bootstrap.getCatalinaHomeFile());
         getServer().setCatalinaBase(Bootstrap.getCatalinaBaseFile());
 
+        // 初始化流，其实就是输入输出流，可以忽略
         // Stream redirection
         initStreams();
 
         // Start the new server
         try {
+            // 初始化 server
+            // 调用到了生命周期
             getServer().init();
         } catch (LifecycleException e) {
             if (Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE")) {
@@ -736,13 +801,16 @@ public class Catalina {
     }
 
 
+    // 加载，被 Bootstrap 反射调用，start 的情况，这时候参数传递的是 start
     /*
      * Load using arguments
      */
     public void load(String args[]) {
 
         try {
+            // 处理命令行参数，这里用 start
             if (arguments(args)) {
+                // 加载
                 load();
             }
         } catch (Exception e) {
@@ -751,12 +819,15 @@ public class Catalina {
     }
 
 
+    // 启动一个新的 server 实例
     /**
      * Start a new server instance.
      */
     public void start() {
 
         if (getServer() == null) {
+            // 如果当前还没有 server，则先加载
+            // 默认前边已经加载了
             load();
         }
 
@@ -769,6 +840,8 @@ public class Catalina {
 
         // Start the new server
         try {
+            // 调用 server 的 start，启动 standardServer 服务
+            // 继续走到 LifecycleBase 声明周期类
             getServer().start();
         } catch (LifecycleException e) {
             log.fatal(sm.getString("catalina.serverStartFail"), e);
@@ -891,26 +964,37 @@ public class Catalina {
     }
 
 
+    /**
+     * 初始化关于 naming 的配置变量，设置到系统变量中
+     */
     protected void initNaming() {
+        // 设置额外属性
         // Setting additional variables
         if (!useNaming) {
             log.info(sm.getString("catalina.noNaming"));
             System.setProperty("catalina.useNaming", "false");
         } else {
+            // 设置系统属性 catalina.useNaming = true
             System.setProperty("catalina.useNaming", "true");
+            // 要设置的值
             String value = "org.apache.naming";
             String oldValue =
+                // java.naming.factory.url.pkgs
                 System.getProperty(javax.naming.Context.URL_PKG_PREFIXES);
             if (oldValue != null) {
+                // 如果已经有该系统变量，则用冒号连接，添加该值
                 value = value + ":" + oldValue;
             }
+            // 设置系统属性 java.naming.factory.url.pkgs 为 org.apache.naming
             System.setProperty(javax.naming.Context.URL_PKG_PREFIXES, value);
             if( log.isDebugEnabled() ) {
                 log.debug("Setting naming prefix=" + value);
             }
+            // 获取系统属性 java.naming.factory.initial
             value = System.getProperty
                 (javax.naming.Context.INITIAL_CONTEXT_FACTORY);
             if (value == null) {
+                // 如果没有设置，则进行设置为 org.apache.naming.java.javaURLContextFactory
                 System.setProperty
                     (javax.naming.Context.INITIAL_CONTEXT_FACTORY,
                      "org.apache.naming.java.javaURLContextFactory");
@@ -921,12 +1005,16 @@ public class Catalina {
     }
 
 
+    // 设置 SecurityConfig 相关的配置
     /**
      * Set the security package access/protection.
      */
     protected void setSecurityProtection(){
+        // 构建安全协议相关的配置
         SecurityConfig securityConfig = SecurityConfig.newInstance();
+        // 设置默认 package.definition 设置
         securityConfig.setPackageDefinition();
+        // 设置默认 package.access 设置
         securityConfig.setPackageAccess();
     }
 

@@ -19,6 +19,7 @@ package org.apache.tomcat.util.digester;
 import org.apache.tomcat.util.res.StringManager;
 import org.xml.sax.Attributes;
 
+// 规则抽象
 /**
  * Concrete implementations of this class implement actions to be taken when
  * a corresponding nested pattern of XML elements has been matched.
@@ -39,6 +40,7 @@ public abstract class Rule {
     // ----------------------------------------------------- Instance Variables
 
 
+    // 规则对应的关联的 Digester
     /**
      * The Digester with which this Rule is associated.
      */

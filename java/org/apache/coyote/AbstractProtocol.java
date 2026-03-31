@@ -75,6 +75,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
     private int nameIndex = 0;
 
 
+    // 默认是 NioEndpoint，在 Http11NioProtocol 无参构造函数的时候，创建了 new NioEndpoint
     /**
      * Endpoint that provides low-level network I/O - must be matched to the
      * ProtocolHandler implementation (ProtocolHandler using NIO, requires NIO
@@ -83,6 +84,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
     private final AbstractEndpoint<S,?> endpoint;
 
 
+    // Http11NioProtocol 的构造函数中，默认设置了 ConnectionHandler
     private Handler<S> handler;
 
 
@@ -97,7 +99,9 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
     public AbstractProtocol(AbstractEndpoint<S,?> endpoint) {
         this.endpoint = endpoint;
+        // -1
         setConnectionLinger(Constants.DEFAULT_CONNECTION_LINGER);
+        // true
         setTcpNoDelay(Constants.DEFAULT_TCP_NO_DELAY);
     }
 
@@ -145,6 +149,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         return rgOname;
     }
 
+    // 在 init 阶段，默认是 CoyoteAdapter
     /**
      * The adapter provides the link between the ProtocolHandler and the
      * connector.
@@ -281,6 +286,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         endpoint.setKeepAliveTimeout(keepAliveTimeout);
     }
 
+    // 端口地址
     public InetAddress getAddress() { return endpoint.getAddress(); }
     public void setAddress(InetAddress ia) {
         endpoint.setAddress(ia);
@@ -596,10 +602,12 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                     getHandler().getGlobal(), rgOname, null);
         }
 
+        // 端点名称，
         String endpointName = getName();
         endpoint.setName(endpointName.substring(1, endpointName.length()-1));
         endpoint.setDomain(domain);
 
+        // 调用端点进行初始化
         endpoint.init();
     }
 
@@ -759,6 +767,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
     protected static class ConnectionHandler<S> implements AbstractEndpoint.Handler<S> {
 
+        // 默认是在构造函数的时候传了 this 当前对象，也就是 Http11NioProtocol
         private final AbstractProtocol<S> proto;
         private final RequestGroupInfo global = new RequestGroupInfo();
         private final AtomicLong registerCount = new AtomicLong(0);

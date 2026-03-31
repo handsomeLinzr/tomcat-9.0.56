@@ -78,6 +78,7 @@ public class ObjectCreateRule extends Rule {
     // --------------------------------------------------------- Public Methods
 
 
+    // 解析元素的开始
     /**
      * Process the beginning of this element.
      *
@@ -92,6 +93,7 @@ public class ObjectCreateRule extends Rule {
     public void begin(String namespace, String name, Attributes attributes)
             throws Exception {
 
+        // 获取要创建的类名，默认 Server 对应 StandardServer
         String realClassName = getRealClassName(attributes);
 
         if (realClassName == null) {
@@ -100,6 +102,7 @@ public class ObjectCreateRule extends Rule {
 
         // Instantiate the new object and push it on the context stack
         Class<?> clazz = digester.getClassLoader().loadClass(realClassName);
+        // 创建对应的示例，推到 digester.stack 中
         Object instance = clazz.getConstructor().newInstance();
         digester.push(instance);
 
@@ -113,6 +116,7 @@ public class ObjectCreateRule extends Rule {
     }
 
 
+    // 获取 className
     /**
      * Return the actual class name of the class to be instantiated.
      * @param attributes The attribute list for this element
@@ -120,10 +124,13 @@ public class ObjectCreateRule extends Rule {
      */
     protected String getRealClassName(Attributes attributes) {
         // Identify the name of the class to instantiate
+        // 创建的时候构造函数设置的 className
         String realClassName = className;
         if (attributeName != null) {
+            // 从配置中获取对应的 attributeName 属性
             String value = attributes.getValue(attributeName);
             if (value != null) {
+                // 有则替换
                 realClassName = value;
             }
         }

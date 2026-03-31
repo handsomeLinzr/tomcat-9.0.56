@@ -206,15 +206,22 @@ public class NamingContextListener
     @Override
     public void lifecycleEvent(LifecycleEvent event) {
 
+        // 获取容器
         container = event.getLifecycle();
 
+
         if (container instanceof Context) {
+            // Context 容器
             namingResources = ((Context) container).getNamingResources();
             token = ((Context) container).getNamingToken();
         } else if (container instanceof Server) {
+            // Server 容器
+            // 这里 namingResources = NamingResourcesImpl
             namingResources = ((Server) container).getGlobalNamingResources();
+            // token = new Object
             token = ((Server) container).getNamingToken();
         } else {
+            // 其他
             return;
         }
 

@@ -28,6 +28,8 @@ import java.net.URI;
  */
 public class ConfigFileLoader {
 
+    // 配置文件的数据源
+    // CatalinaBaseConfigurationSource
     private static ConfigurationSource source;
 
     public static final ConfigurationSource getSource() {

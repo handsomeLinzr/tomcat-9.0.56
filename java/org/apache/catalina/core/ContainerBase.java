@@ -268,6 +268,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
      * children associated with this container.
      */
     private int startStopThreads = 1;
+    // 在 init 的时候，调用了 reconfigureStartStopExecutor 方法，设置了 InlineExecutorService
     protected ExecutorService startStopExecutor;
 
 
@@ -584,6 +585,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
     }
 
 
+    // 返回与这个容器相关的 Realm
     /**
      * Return the Realm with which this Container is associated.  If there is
      * no associated Realm, return the Realm associated with our parent
@@ -870,6 +872,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
 
     @Override
     protected void initInternal() throws LifecycleException {
+        // getStartStopThreads = 1
         reconfigureStartStopExecutor(getStartStopThreads());
         super.initInternal();
     }

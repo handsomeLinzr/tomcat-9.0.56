@@ -49,6 +49,7 @@ public class SetPropertiesRule extends Rule {
         }
     }
 
+    // 设置属性
     /**
      * Process the beginning of this element.
      *
@@ -63,6 +64,7 @@ public class SetPropertiesRule extends Rule {
     public void begin(String namespace, String theName, Attributes attributes)
             throws Exception {
 
+        // 获取栈顶，也就是刚压进去的那个，当前解析到的父标签
         // Populate the corresponding properties of the top object
         Object top = digester.peek();
         if (digester.log.isDebugEnabled()) {
@@ -81,11 +83,14 @@ public class SetPropertiesRule extends Rule {
             variableName = digester.toVariableName(top);
         }
 
+        // 遍历元素
         for (int i = 0; i < attributes.getLength(); i++) {
+            // 获取名称
             String name = attributes.getLocalName(i);
             if (name.isEmpty()) {
                 name = attributes.getQName(i);
             }
+            // 获取值
             String value = attributes.getValue(i);
 
             if (digester.log.isDebugEnabled()) {
@@ -98,6 +103,7 @@ public class SetPropertiesRule extends Rule {
                 if (code != null) {
                     actualMethod = new StringBuilder();
                 }
+                // 设置属性值
                 if (!IntrospectionUtils.setProperty(top, name, value, true, actualMethod)) {
                     if (digester.getRulesValidation() && !"optional".equals(name)) {
                         digester.log.warn(sm.getString("rule.noProperty", digester.match, name, value));

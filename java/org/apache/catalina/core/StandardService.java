@@ -410,6 +410,7 @@ public class StandardService extends LifecycleMBeanBase implements Service {
     }
 
 
+    // start 方法
     /**
      * Start nested components ({@link Executor}s, {@link Connector}s and
      * {@link Container}s) and implement the requirements of
@@ -424,21 +425,25 @@ public class StandardService extends LifecycleMBeanBase implements Service {
         if(log.isInfoEnabled()) {
             log.info(sm.getString("standardService.start.name", this.name));
         }
+        // 设置状态
         setState(LifecycleState.STARTING);
 
         // Start our defined Container first
         if (engine != null) {
             synchronized (engine) {
+                // 如果设置了 engine 引擎，则启动对应的 engine
                 engine.start();
             }
         }
 
         synchronized (executors) {
             for (Executor executor: executors) {
+                // 启动所有的 executor 线程池f
                 executor.start();
             }
         }
 
+        // 启动 mapperListener
         mapperListener.start();
 
         // Start our defined Connectors second
@@ -525,7 +530,7 @@ public class StandardService extends LifecycleMBeanBase implements Service {
         }
     }
 
-
+    // 初始化 service
     /**
      * Invoke a pre-startup initialization. This is used to allow connectors
      * to bind to restricted ports under Unix operating environments.
@@ -536,6 +541,7 @@ public class StandardService extends LifecycleMBeanBase implements Service {
         super.initInternal();
 
         if (engine != null) {
+            // 最后调用了 getRealm()，权限
             engine.init();
         }
 
@@ -544,6 +550,7 @@ public class StandardService extends LifecycleMBeanBase implements Service {
             if (executor instanceof JmxEnabled) {
                 ((JmxEnabled) executor).setDomain(getDomain());
             }
+            // 如果有设置了线程池，则初始化
             executor.init();
         }
 
@@ -615,6 +622,7 @@ public class StandardService extends LifecycleMBeanBase implements Service {
     @Override
     protected String getDomainInternal() {
         String domain = null;
+        // engine
         Container engine = getContainer();
 
         // Use the engine name first

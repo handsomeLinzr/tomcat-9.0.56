@@ -16,6 +16,7 @@
  */
 package org.apache.catalina;
 
+// 生命周期状态枚举
 /**
  * The list of valid states for components that implement {@link Lifecycle}.
  * See {@link Lifecycle} for the state transition diagram.
@@ -34,7 +35,9 @@ public enum LifecycleState {
     DESTROYED(false, Lifecycle.AFTER_DESTROY_EVENT),
     FAILED(false, null);
 
+    // 是否可用
     private final boolean available;
+    // 状态对应的生命周期
     private final String lifecycleEvent;
 
     private LifecycleState(boolean available, String lifecycleEvent) {

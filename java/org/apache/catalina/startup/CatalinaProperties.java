@@ -40,7 +40,9 @@ public class CatalinaProperties {
     private static Properties properties = null;
 
 
+    // 静态代码块，先进行加载
     static {
+        // 加载配置
         loadProperties();
     }
 
@@ -63,6 +65,7 @@ public class CatalinaProperties {
         String fileName = "catalina.properties";
 
         try {
+            // 获取系统配置 catalina.config
             String configUrl = System.getProperty("catalina.config");
             if (configUrl != null) {
                 if (configUrl.indexOf('/') == -1) {
@@ -78,6 +81,8 @@ public class CatalinaProperties {
 
         if (is == null) {
             try {
+                // 获取 catalina 路径和配置文件路径
+                // 将配置文件解析成 input 输入流
                 File home = new File(Bootstrap.getCatalinaBase());
                 File conf = new File(home, "conf");
                 File propsFile = new File(conf, fileName);
@@ -89,6 +94,7 @@ public class CatalinaProperties {
 
         if (is == null) {
             try {
+                // 如果输入流是空的，则读取默认配置文件 /org/apache/catalina/startup/catalina.properties
                 is = CatalinaProperties.class.getResourceAsStream
                     ("/org/apache/catalina/startup/catalina.properties");
             } catch (Throwable t) {
@@ -98,6 +104,7 @@ public class CatalinaProperties {
 
         if (is != null) {
             try {
+                // 将配置读取到 properties
                 properties = new Properties();
                 properties.load(is);
             } catch (Throwable t) {
@@ -119,6 +126,7 @@ public class CatalinaProperties {
             properties = new Properties();
         }
 
+        // 注册配置信息到系统变量中
         // Register the properties as system properties
         Enumeration<?> enumeration = properties.propertyNames();
         while (enumeration.hasMoreElements()) {

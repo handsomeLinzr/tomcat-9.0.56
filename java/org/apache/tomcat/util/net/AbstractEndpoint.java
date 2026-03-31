@@ -641,6 +641,7 @@ public abstract class AbstractEndpoint<S,U> {
     } }
     public int getAcceptCount() { return acceptCount; }
 
+    // 是否在 init 的时候绑定端口和 destroy 解绑，默认 true；如果是 false，则在 start 绑定，stop 解绑
     /**
      * Controls when the Endpoint binds the port. <code>true</code>, the default
      * binds the port on {@link #init()} and unbinds it on {@link #destroy()}.
@@ -719,6 +720,7 @@ public abstract class AbstractEndpoint<S,U> {
      */
     public abstract boolean isAlpnSupported();
 
+    // 最小的 worker 线程数量
     private int minSpareThreads = 10;
     public void setMinSpareThreads(int minSpareThreads) {
         this.minSpareThreads = minSpareThreads;
@@ -743,6 +745,7 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
+    // 最大的 worker 线程数量
     /**
      * Maximum amount of worker threads.
      */
@@ -858,6 +861,7 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
+    // 默认是 ConnectionHandler
     /**
      * Handling of accepted sockets.
      */
@@ -982,11 +986,17 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
+    // 创建 worker 执行线程池，最小数量 10， 最大数量 200
+    // 对应的任务队列是 TaskQueue
     public void createExecutor() {
         internalExecutor = true;
+        // 创建任务队列
         TaskQueue taskqueue = new TaskQueue();
+        // 创建线程工厂
         TaskThreadFactory tf = new TaskThreadFactory(getName() + "-exec-", daemon, getThreadPriority());
+        // 创建线程池，赋值给 executor，最小是 10， 最大是 200
         executor = new ThreadPoolExecutor(getMinSpareThreads(), getMaxThreads(), 60, TimeUnit.SECONDS,taskqueue, tf);
+        // 设置关联
         taskqueue.setParent( (ThreadPoolExecutor) executor);
     }
 
@@ -1221,9 +1231,12 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
+    // 实例化
     public final void init() throws Exception {
         if (bindOnInit) {
+            // 绑定
             bindWithCleanup();
+            // 设置绑定状态
             bindState = BindState.BOUND_ON_INIT;
         }
         if (this.domain != null) {

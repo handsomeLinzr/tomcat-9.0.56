@@ -16,6 +16,7 @@
  */
 package org.apache.catalina.startup;
 
+// 常量，定义了一系列的配置文件路径
 /**
  * String constants for the startup package.
  * <br>

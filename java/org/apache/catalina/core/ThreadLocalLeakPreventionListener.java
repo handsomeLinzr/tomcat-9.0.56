@@ -75,6 +75,7 @@ public class ThreadLocalLeakPreventionListener extends FrameworkListener {
 
             if (Lifecycle.AFTER_STOP_EVENT.equals(event.getType()) &&
                     lifecycle instanceof Context) {
+                // 关闭线程
                 stopIdleThreads((Context) lifecycle);
             }
         } catch (Exception e) {

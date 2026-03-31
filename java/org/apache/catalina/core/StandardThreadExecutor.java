@@ -49,11 +49,13 @@ public class StandardThreadExecutor extends LifecycleMBeanBase
      */
     protected String namePrefix = "tomcat-exec-";
 
+    // 默认最大线程数
     /**
      * max number of threads
      */
     protected int maxThreads = 200;
 
+    // 默认最小线程数
     /**
      * min number of threads
      */
@@ -107,6 +109,7 @@ public class StandardThreadExecutor extends LifecycleMBeanBase
     }
 
 
+    // 启动线程池
     /**
      * Start the component and implement the requirements
      * of {@link org.apache.catalina.util.LifecycleBase#startInternal()}.
@@ -117,15 +120,21 @@ public class StandardThreadExecutor extends LifecycleMBeanBase
     @Override
     protected void startInternal() throws LifecycleException {
 
+        // 任务队列，长度是 Integer.MAX_VALUE
         taskqueue = new TaskQueue(maxQueueSize);
+        // 创建一个任务线程工厂
         TaskThreadFactory tf = new TaskThreadFactory(namePrefix,daemon,getThreadPriority());
+        // 创建线程池，赋值给 executor             25                    200          60000
         executor = new ThreadPoolExecutor(getMinSpareThreads(), getMaxThreads(), maxIdleTime, TimeUnit.MILLISECONDS,taskqueue, tf);
         executor.setThreadRenewalDelay(threadRenewalDelay);
         if (prestartminSpareThreads) {
+            // 如果开了预热的开关，会先运行所有的核心线程
             executor.prestartAllCoreThreads();
         }
+        // 给任务队列设置执行器的关联，关联上当前的线程池
         taskqueue.setParent(executor);
 
+        // 设置状态
         setState(LifecycleState.STARTING);
     }
 

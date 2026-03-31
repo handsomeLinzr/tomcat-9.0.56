@@ -36,12 +36,14 @@ public abstract class LifecycleMBeanBase extends LifecycleBase
         StringManager.getManager("org.apache.catalina.util");
 
 
+    // 缓存 MBean 的注册
     /* Cache components of the MBean registration. */
     private String domain = null;
     private ObjectName oname = null;
     @Deprecated
     protected MBeanServer mserver = null;
 
+    // 注册 MBean
     /**
      * Sub-classes wishing to perform additional initialization should override
      * this method, ensuring that super.initInternal() is the first call in the
@@ -92,6 +94,7 @@ public abstract class LifecycleMBeanBase extends LifecycleBase
         }
 
         if (domain == null) {
+            // 默认 Catalina
             domain = Globals.DEFAULT_MBEAN_DOMAIN;
         }
 

@@ -40,6 +40,7 @@ public class RulesBase implements Rules {
 
     // ----------------------------------------------------- Instance Variables
 
+    // 规则缓存，对应 pattern 和 规则列表的映射
     /**
      * The set of registered Rule instances, keyed by the matching pattern.
      * Each value is a List containing the Rules for that pattern, in the
@@ -48,12 +49,14 @@ public class RulesBase implements Rules {
     protected HashMap<String,List<Rule>> cache = new HashMap<>();
 
 
+    // 当前规则所关联的 digester
     /**
      * The Digester instance with which this Rules instance is associated.
      */
     protected Digester digester = null;
 
 
+    // 所有的规则集合
     /**
      * The set of registered Rule instances, in the order that they were
      * originally registered.
@@ -89,6 +92,8 @@ public class RulesBase implements Rules {
 
     // --------------------------------------------------------- Public Methods
 
+
+    // 注册一个新的规则实例，并映射对应的匹配名称
     /**
      * Register a new Rule instance matching the specified pattern.
      *
@@ -103,14 +108,19 @@ public class RulesBase implements Rules {
             pattern = pattern.substring(0, patternLength-1);
         }
 
+        // 从 cache 中获取对应 pattern 匹配的规则
         List<Rule> list = cache.get(pattern);
+        // 如果没有，则创建 list，并添加进去
         if (list == null) {
             list = new ArrayList<>();
             cache.put(pattern, list);
         }
+        // 给 list 中添加这个新规则
         list.add(rule);
+        // 给 rules 添加这个规则
         rules.add(rule);
         if (this.digester != null) {
+            // 设置规则的关联 digester
             rule.setDigester(this.digester);
         }
     }

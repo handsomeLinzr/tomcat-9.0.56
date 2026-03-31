@@ -43,22 +43,27 @@ public interface ConfigurationSource {
         @Override
         public Resource getResource(String name) throws IOException {
             if (!UriUtil.isAbsoluteURI(name)) {
+                // 如果不是绝对路径，则进行补全，最后得到绝对路径
                 File f = new File(name);
                 if (!f.isAbsolute()) {
                     f = new File(userDir, name);
                 }
+                // 判断如果是文件，直接返回对应的原件源
                 if (f.isFile()) {
                     FileInputStream fis = new FileInputStream(f);
                     return new Resource(fis, f.toURI());
                 }
             }
+            // 如果是绝对路径
             URI uri = null;
             try {
+                // 转换成 uri
                 uri = userDirUri.resolve(name);
             } catch (IllegalArgumentException e) {
                 throw new FileNotFoundException(name);
             }
             try {
+                // 返回对应的文件源
                 URL url = uri.toURL();
                 return new Resource(url.openConnection().getInputStream(), uri);
             } catch (MalformedURLException e) {
@@ -117,6 +122,7 @@ public interface ConfigurationSource {
         }
     }
 
+    // 返回 contents 的主要配置文件 conf/server.xml 文件
     /**
      * Returns the contents of the main conf/server.xml file.
      * @return the server.xml as an InputStream
@@ -124,6 +130,7 @@ public interface ConfigurationSource {
      */
     public default Resource getServerXml()
             throws IOException {
+        // 获取 server.xml 的文件流
         return getConfResource("server.xml");
     }
 
@@ -146,6 +153,7 @@ public interface ConfigurationSource {
      */
     public default Resource getConfResource(String name)
             throws IOException {
+        // 全名
         String fullName = "conf/" + name;
         return getResource(fullName);
     }

@@ -53,11 +53,13 @@ public class MapperListener extends LifecycleMBeanBase
 
 
     // ----------------------------------------------------- Instance Variables
+    // Mapper
     /**
      * Associated mapper.
      */
     private final Mapper mapper;
 
+    // 当前 mapperListener 所关联的 service
     /**
      * Associated service
      */
@@ -84,6 +86,7 @@ public class MapperListener extends LifecycleMBeanBase
      * @param service The service this listener is associated with
      */
     public MapperListener(Service service) {
+        // 设置关联的 service
         this.service = service;
         this.mapper = service.getMapper();
     }
@@ -91,11 +94,14 @@ public class MapperListener extends LifecycleMBeanBase
 
     // ------------------------------------------------------- Lifecycle Methods
 
+    // 启动 mapperListener
     @Override
     public void startInternal() throws LifecycleException {
 
+        // 设置状态
         setState(LifecycleState.STARTING);
 
+        // 获取当前关联的 service 的执行引擎
         Engine engine = service.getContainer();
         if (engine == null) {
             return;

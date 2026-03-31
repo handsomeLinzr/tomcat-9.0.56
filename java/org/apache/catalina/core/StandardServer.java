@@ -76,6 +76,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
 
     // ------------------------------------------------------------ Constructor
 
+    // server 构造函数处理
     /**
      * Construct a default instance of this class.
      */
@@ -84,9 +85,11 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
         super();
 
         globalNamingResources = new NamingResourcesImpl();
+        //  设置和当前这个 Server 关联
         globalNamingResources.setContainer(this);
 
         if (isUseNaming()) {
+            // 默认true，添加监听器
             namingContextListener = new NamingContextListener();
             addLifecycleListener(namingContextListener);
         } else {
@@ -104,13 +107,15 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
      */
     private javax.naming.Context globalNamingContext = null;
 
-
+    // 全局命名资源
+    // 在构造函数的时候创建并设置 NamingResourcesImpl
     /**
      * Global naming resources.
      */
     private NamingResourcesImpl globalNamingResources = null;
 
 
+    // StandardServer：NamingContextListener、
     /**
      * The naming context listener for this web application.
      */
@@ -171,12 +176,14 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
      */
     private volatile ServerSocket awaitSocket = null;
 
+    // 对应的 catalina 路径
     private File catalinaHome = null;
 
     private File catalinaBase = null;
 
     private final Object namingToken = new Object();
 
+    // 处理程序任务的线程数
     /**
      * The number of threads available to process utility tasks in this service.
      */
@@ -187,11 +194,13 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
      */
     protected boolean utilityThreadsAsDaemon = false;
 
+    // 定时调度线程池，在 reconfigureUtilityExecutor 的时候设置，设置成了 ScheduledThreadPoolExecutor
     /**
      * Utility executor with scheduling capabilities.
      */
     private ScheduledThreadPoolExecutor utilityExecutor = null;
 
+    // 对 utilityExecutor 的一个包装，默认设置成了 ScheduledThreadPoolExecutor，其中包装了 utilityExecutor
     /**
      * Utility executor wrapper.
      */
@@ -406,12 +415,15 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     }
 
 
+    // 处理特殊值
     /**
      * Handles the special values.
      */
     private static int getUtilityThreadsInternal(int utilityThreads) {
         int result = utilityThreads;
         if (result <= 0) {
+            // 如果是设置小于0，则默认是当前 cpu 核心数加传进来的结果
+            // 最小是 2
             result = Runtime.getRuntime().availableProcessors() + result;
             if (result < 2) {
                 result = 2;
@@ -435,18 +447,25 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     }
 
 
+    // 重新配置公共的线程池
     private synchronized void reconfigureUtilityExecutor(int threads) {
         // The ScheduledThreadPoolExecutor doesn't use MaximumPoolSize, only CorePoolSize is available
         if (utilityExecutor != null) {
+            // 如果已经初始化了任务执行器，则直接设置核心线程数即可
             utilityExecutor.setCorePoolSize(threads);
         } else {
+            // 否则创建任务执行器
             ScheduledThreadPoolExecutor scheduledThreadPoolExecutor =
+                // 核心线程数 = threads，默认 2
                     new ScheduledThreadPoolExecutor(threads,
+                            // 线程名称                                             守护线程标识              最小优先级
                             new TaskThreadFactory("Catalina-utility-", utilityThreadsAsDaemon, Thread.MIN_PRIORITY));
+            //  10秒存活
             scheduledThreadPoolExecutor.setKeepAliveTime(10, TimeUnit.SECONDS);
             scheduledThreadPoolExecutor.setRemoveOnCancelPolicy(true);
             scheduledThreadPoolExecutor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
             utilityExecutor = scheduledThreadPoolExecutor;
+            // 做一个线程池的包装
             utilityExecutorWrapper = new org.apache.tomcat.util.threads.ScheduledThreadPoolExecutor(utilityExecutor);
         }
     }
@@ -906,6 +925,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     }
 
 
+    // Server 的启动方法
     /**
      * Start nested components ({@link Service}s) and implement the requirements
      * of {@link org.apache.catalina.util.LifecycleBase#startInternal()}.
@@ -916,19 +936,24 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     @Override
     protected void startInternal() throws LifecycleException {
 
+        // 传递配置启动事件
         fireLifecycleEvent(CONFIGURE_START_EVENT, null);
+        // 设置当前的生命周期状态为启动中 STARTING
         setState(LifecycleState.STARTING);
 
+        // 启动全局资源
         globalNamingResources.start();
 
         // Start our defined Services
         synchronized (servicesLock) {
+            // 重点，遍历所有的 service，调用 start 方法
             for (Service service : services) {
                 service.start();
             }
         }
 
         if (periodicEventDelay > 0) {
+            // 监控
             monitorFuture = getUtilityExecutor().scheduleWithFixedDelay(
                     () -> startPeriodicLifecycleEvent(), 0, 60, TimeUnit.SECONDS);
         }
@@ -984,6 +1009,8 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
         stopAwait();
     }
 
+    // 启动前的初始化
+    // 这个可以允许连接器去绑定线程
     /**
      * Invoke a pre-startup initialization. This is used to allow connectors
      * to bind to restricted ports under Unix operating environments.
@@ -993,8 +1020,11 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
 
         super.initInternal();
 
+        // 初始化执行器线程池
+        // getUtilityThreadsInternal(utilityThreads) 对线程数继续处理，最小是2
         // Initialize utility executor
         reconfigureUtilityExecutor(getUtilityThreadsInternal(utilityThreads));
+        // 注册名称
         register(utilityExecutor, "type=UtilityExecutor");
 
         // Register global String cache
@@ -1008,12 +1038,14 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
         factory.setContainer(this);
         onameMBeanFactory = register(factory, "type=MBeanFactory");
 
+        // 调用 NamingResourcesImpl
         // Register the naming resources
         globalNamingResources.init();
 
         // Populate the extension validator with JARs from common and shared
         // class loaders
         if (getCatalina() != null) {
+            // 获取对应的类加载器
             ClassLoader cl = getCatalina().getParentClassLoader();
             // Walk the class loader hierarchy. Stop at the system class loader.
             // This will add the shared (if present) and common class loaders
@@ -1037,6 +1069,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
                 cl = cl.getParent();
             }
         }
+        // 初始化定义的 services
         // Initialize our defined Services
         for (Service service : services) {
             service.init();
@@ -1093,9 +1126,12 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     }
 
 
+    // 在 initInternal 中赋值
     private ObjectName onameStringCache;
+    // 在 initInternal 中赋值
     private ObjectName onameMBeanFactory;
 
+    // 获取该 Server 的 MBean 域
     /**
      * Obtain the MBean domain for this server. The domain is obtained using
      * the following search order:

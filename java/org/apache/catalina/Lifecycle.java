@@ -17,6 +17,9 @@
 package org.apache.catalina;
 
 
+// 通用个组件声明周期方法声明
+// catalina 组件需要实现这个接口，以便提供一致的机制来启动和停止组件
+// 支持组件的生命周期有效转换如下
 /**
  * Common interface for component life cycle methods.  Catalina components
  * may implement this interface (as well as the appropriate interface(s) for
@@ -56,22 +59,29 @@ package org.apache.catalina;
  * ----»-----------------------------»------------------------------
  *
  * Any state can transition to FAILED.
+ * 任何状态都可以转化到失败
  *
  * Calling start() while a component is in states STARTING_PREP, STARTING or
  * STARTED has no effect.
+ * 调用 start 方法后状态转化为 STARTING_PREP，STARTING 和 STARTED 是不允许的
  *
  * Calling start() while a component is in state NEW will cause init() to be
  * called immediately after the start() method is entered.
+ * 当组件处于 NEW 状态时调用start()，将导致init（）处于NEW状态，在start（）方法输入后立即调用。
  *
  * Calling stop() while a component is in states STOPPING_PREP, STOPPING or
  * STOPPED has no effect.
+ * 当一个组件属于 STOPPING_PREP、STOPPING 或 STOPPED 状态时调用 stop 方法无效
  *
  * Calling stop() while a component is in state NEW transitions the component
  * to STOPPED. This is typically encountered when a component fails to start and
  * does not start all its sub-components. When the component is stopped, it will
  * try to stop all sub-components - even those it didn't start.
+ * 当状态属于 NEW 状态时调用 stop 方法后，会让状态转为 STOPPED 状态，当一个组件启动失败，且没有启动所有子容器，就经常出现这种情况
+ * 当组件停止，它将会尝试停止所有的子容器，即使他们没有启动
  *
  * Attempting any other transition will throw {@link LifecycleException}.
+ * 其他的类型装换都会抛出异常
  *
  * </pre>
  * The {@link LifecycleEvent}s fired during state changes are defined in the

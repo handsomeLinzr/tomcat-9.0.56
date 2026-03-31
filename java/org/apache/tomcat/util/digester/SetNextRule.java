@@ -124,8 +124,11 @@ public class SetNextRule extends Rule {
     @Override
     public void end(String namespace, String name) throws Exception {
 
+
         // Identify the objects to be used
+        // 刚建好的 Service
         Object child = digester.peek(0);
+        // 栈的下一个，父标签 Server
         Object parent = digester.peek(1);
         if (digester.log.isDebugEnabled()) {
             if (parent == null) {
@@ -139,6 +142,7 @@ public class SetNextRule extends Rule {
             }
         }
 
+        // 调用方法，调用 addServices 方法，设置 services
         // Call the specified method
         IntrospectionUtils.callMethod1(parent, methodName,
                 child, paramType, digester.getClassLoader());

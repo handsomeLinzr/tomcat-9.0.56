@@ -31,24 +31,38 @@ import org.apache.tomcat.util.res.StringManager;
 
 public class CatalinaBaseConfigurationSource implements ConfigurationSource {
 
+    // Constants.Package = org.apache.catalina.startup
     protected static final StringManager sm = StringManager.getManager(Constants.Package);
 
+    // server.xml 路径
     private final String serverXmlPath;
+    // catalina 相关对应的文件路径
     private final File catalinaBaseFile;
     private final URI catalinaBaseUri;
 
+    /**
+     * Catalina 基础配置源对象
+     * @param catalinaBaseFile
+     * @param serverXmlPath
+     */
     public CatalinaBaseConfigurationSource(File catalinaBaseFile, String serverXmlPath) {
         this.catalinaBaseFile = catalinaBaseFile;
         catalinaBaseUri = catalinaBaseFile.toURI();
         this.serverXmlPath = serverXmlPath;
     }
 
+    /**
+     * 获取 server.xml 对应的文件源
+     * @return
+     * @throws IOException
+     */
     @Override
     public Resource getServerXml() throws IOException {
         IOException ioe = null;
         Resource result = null;
         try {
             if (serverXmlPath == null || serverXmlPath.equals(Catalina.SERVER_XML)) {
+                // 默认的 server.xml 文件路径
                 result = ConfigurationSource.super.getServerXml();
             } else {
                 result = getResource(serverXmlPath);
@@ -58,6 +72,7 @@ public class CatalinaBaseConfigurationSource implements ConfigurationSource {
         }
         if (result == null) {
             // Compatibility with legacy server-embed.xml location
+            // 如果还没有获取文件，则获取 server-embed.xml 内置 tomcat
             InputStream stream = getClass().getClassLoader().getResourceAsStream("server-embed.xml");
             if (stream != null) {
                 try {
@@ -68,6 +83,7 @@ public class CatalinaBaseConfigurationSource implements ConfigurationSource {
             }
         }
 
+        // 返回对应的文件源
         if (result == null && ioe != null) {
             throw ioe;
         } else {

@@ -62,6 +62,7 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
 
     // ----------------------------------------------------------------- Fields
 
+    // 服务端 socket，在 bind 的时候创建，对应 AsynchronousServerSocketChannel.open(threadGroup);
     /**
      * Server socket "pointer".
      */
@@ -72,6 +73,7 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
      */
     private static ThreadLocal<Boolean> inlineCompletion = new ThreadLocal<>();
 
+    // 在 bind 的时候设置，对应的是 AsynchronousChannelGroup.withThreadPool((ExecutorService) getExecutor())
     /**
      * Thread group associated with the server socket.
      */
@@ -115,6 +117,7 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
     // ----------------------------------------------- Public Lifecycle Methods
 
 
+    // 初始化 endpoint，绑定端口
     /**
      * Initialize the endpoint.
      */
@@ -123,9 +126,11 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
 
         // Create worker collection
         if (getExecutor() == null) {
+            // 创建 worker 线程池 ThreadPoolExecutor
             createExecutor();
         }
         if (getExecutor() instanceof ExecutorService) {
+            // 线程池组
             threadGroup = AsynchronousChannelGroup.withThreadPool((ExecutorService) getExecutor());
         }
         // AsynchronousChannelGroup needs exclusive access to its executor service
@@ -133,11 +138,16 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
             log.warn(sm.getString("endpoint.nio2.exclusiveExecutor"));
         }
 
+        // 创建当前端点的监听 serverSocket
+        // 并设置对应的线程组是 threadGroup
         serverSock = AsynchronousServerSocketChannel.open(threadGroup);
+        // 根据配置文件设置 socket 属性
         socketProperties.setProperties(serverSock);
+        // 设置绑定的 ip 和 port
         InetSocketAddress addr = new InetSocketAddress(getAddress(), getPortWithOffset());
         serverSock.bind(addr, getAcceptCount());
 
+        // 初始化 ssl 相关
         // Initialize SSL if needed
         initialiseSsl();
     }

@@ -33,6 +33,7 @@ import org.apache.tomcat.util.net.openssl.ciphers.Cipher;
 
 public abstract class AbstractJsseEndpoint<S,U> extends AbstractEndpoint<S,U> {
 
+    // 设置对应的 ssl 实现，有的话是 OpenSSLImplementation
     private String sslImplementationName = null;
     private int sniParseLimit = 64 * 1024;
 

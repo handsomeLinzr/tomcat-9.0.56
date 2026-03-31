@@ -137,6 +137,7 @@ public final class ClassLoaderFactory {
     }
 
 
+    // 创建类加载器，用来加载 repositories 的资源
     /**
      * Create and return a new class loader, based on the configuration
      * defaults and the specified directory paths:
@@ -158,18 +159,22 @@ public final class ClassLoaderFactory {
             log.debug("Creating new class loader");
         }
 
+        // 将repositories中所有记录都封装成 URL 添加到这里
         // Construct the "class path" for this class loader
         Set<URL> set = new LinkedHashSet<>();
 
+        // 判断是否指定了该类加载器需要加载的配置和包
         if (repositories != null) {
             for (Repository repository : repositories)  {
                 if (repository.getType() == RepositoryType.URL) {
+                    // URL 类型
                     URL url = buildClassLoaderUrl(repository.getLocation());
                     if (log.isDebugEnabled()) {
                         log.debug("  Including URL " + url);
                     }
                     set.add(url);
                 } else if (repository.getType() == RepositoryType.DIR) {
+                    // 文件夹类型
                     File directory = new File(repository.getLocation());
                     directory = directory.getCanonicalFile();
                     if (!validateFile(directory, RepositoryType.DIR)) {
@@ -181,6 +186,7 @@ public final class ClassLoaderFactory {
                     }
                     set.add(url);
                 } else if (repository.getType() == RepositoryType.JAR) {
+                    // JAR 包类型
                     File file=new File(repository.getLocation());
                     file = file.getCanonicalFile();
                     if (!validateFile(file, RepositoryType.JAR)) {
@@ -192,6 +198,7 @@ public final class ClassLoaderFactory {
                     }
                     set.add(url);
                 } else if (repository.getType() == RepositoryType.GLOB) {
+                    // 文件夹类型
                     File directory=new File(repository.getLocation());
                     directory = directory.getCanonicalFile();
                     if (!validateFile(directory, RepositoryType.GLOB)) {
@@ -201,11 +208,13 @@ public final class ClassLoaderFactory {
                         log.debug("  Including directory glob "
                             + directory.getAbsolutePath());
                     }
+                    // 获取文件夹的所有文件
                     String filenames[] = directory.list();
                     if (filenames == null) {
                         continue;
                     }
                     for (String s : filenames) {
+                        // 遍历得到所有的 jar 文件
                         String filename = s.toLowerCase(Locale.ENGLISH);
                         if (!filename.endsWith(".jar")) {
                             continue;
@@ -234,8 +243,10 @@ public final class ClassLoaderFactory {
             }
         }
 
+        // 创建类加载器
         return AccessController.doPrivileged(
                 (PrivilegedAction<URLClassLoader>) () -> {
+                    // 创建类加载器，传进去需要加载的 jar 包
                     if (parent == null) {
                         return new URLClassLoader(array);
                     } else {
