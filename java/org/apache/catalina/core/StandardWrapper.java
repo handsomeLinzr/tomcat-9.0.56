@@ -106,6 +106,7 @@ public class StandardWrapper extends ContainerBase
      */
     protected long available = 0L;
 
+    // 构造函数设置成了 NotificationBroadcasterSupport
     /**
      * The broadcaster that sends j2ee notifications.
      */
@@ -124,6 +125,7 @@ public class StandardWrapper extends ContainerBase
     protected final StandardWrapperFacade facade = new StandardWrapperFacade(this);
 
 
+    // 对应加载到的 servlet 对象
     /**
      * The (single) possibly uninitialized instance of this servlet.
      */
@@ -143,6 +145,7 @@ public class StandardWrapper extends ContainerBase
     protected int loadOnStartup = -1;
 
 
+    // 该 wrapper 所对应的映射 url
     /**
      * Mappings associated with the wrapper.
      */
@@ -174,6 +177,7 @@ public class StandardWrapper extends ContainerBase
      */
     protected long sequenceNumber = 0;
 
+    // 对应的 servlet 类
     /**
      * The fully qualified servlet class name for this servlet.
      */
@@ -228,6 +232,7 @@ public class StandardWrapper extends ContainerBase
     protected long unloadDelay = 2000;
 
 
+    // 默认会被设置成 true，因为有 servlet 类  org.apache.jasper.servlet.JspServlet
     /**
      * True if this StandardWrapper is for the JspServlet
      */
@@ -245,6 +250,7 @@ public class StandardWrapper extends ContainerBase
      */
     protected boolean swallowOutput = false;
 
+    // 构造函数设置成 StandardWrapperValve
     // To support jmx attributes
     protected StandardWrapperValve swValve;
     protected long loadTime=0;
@@ -717,6 +723,7 @@ public class StandardWrapper extends ContainerBase
 
         mappingsLock.writeLock().lock();
         try {
+            // 添加对应的 url 映射
             mappings.add(mapping);
         } finally {
             mappingsLock.writeLock().unlock();
@@ -765,6 +772,9 @@ public class StandardWrapper extends ContainerBase
     @Override
     public Servlet allocate() throws ServletException {
 
+        // 当请求真正映射到这个 Wrapper 时，会先来这里拿 Servlet 实例。
+        // 所以多数 Servlet 实际上是“随请求懒加载”的，而不是在 Wrapper.start() 时就立刻 new。
+
         // If we are currently unloading this servlet, throw an exception
         if (unloading) {
             throw new ServletException(sm.getString("standardWrapper.unloading", getName()));
@@ -772,9 +782,10 @@ public class StandardWrapper extends ContainerBase
 
         boolean newInstance = false;
 
-        // If not SingleThreadedModel, return the same instance every time
+        // 现代 Servlet 基本都是单实例多线程模型。
+        // 常见路径是首次请求触发 loadServlet()+initServlet()，之后一直复用。
         if (!singleThreadModel) {
-            // Load and initialize our instance if necessary
+            // 尚未实例化时，这里会真正加载并初始化 Servlet。
             if (instance == null || !instanceInitialized) {
                 synchronized (this) {
                     if (instance == null) {
@@ -1007,12 +1018,14 @@ public class StandardWrapper extends ContainerBase
      */
     @Override
     public synchronized void load() throws ServletException {
+        // 加载 servlet
         instance = loadServlet();
 
         if (!instanceInitialized) {
             initServlet(instance);
         }
 
+        // jsp
         if (isJspServlet) {
             StringBuilder oname = new StringBuilder(getDomain());
 
@@ -1035,6 +1048,7 @@ public class StandardWrapper extends ContainerBase
     }
 
 
+    // 加载对应的 servlet，实例化并调用 init 方法初始化 servlet，最后返回这个 servlet
     /**
      * Load and initialize an instance of this servlet, if there is not already
      * at least one initialized instance.  This can be used, for example, to
@@ -1067,6 +1081,7 @@ public class StandardWrapper extends ContainerBase
 
             InstanceManager instanceManager = ((StandardContext)getParent()).getInstanceManager();
             try {
+                // 通过对应的 servlet class 实例化 servlet
                 servlet = (Servlet) instanceManager.newInstance(servletClass);
             } catch (ClassCastException e) {
                 unavailable(null);
@@ -1114,8 +1129,10 @@ public class StandardWrapper extends ContainerBase
                 singleThreadModel = true;
             }
 
+            // 初始化
             initServlet(servlet);
 
+            // 事件传播
             fireContainerEvent("load", this);
 
             loadTime=System.currentTimeMillis() -t1;
@@ -1161,9 +1178,11 @@ public class StandardWrapper extends ContainerBase
                     }
                 }
             } else {
+                // 调用 servlet 的 init 方法进行初始化
                 servlet.init(facade);
             }
 
+            // 设置初始化标识为 true
             instanceInitialized = true;
         } catch (UnavailableException f) {
             unavailable(f);
@@ -1578,6 +1597,9 @@ public class StandardWrapper extends ContainerBase
     @Override
     protected synchronized void startInternal() throws LifecycleException {
 
+        // Wrapper 代表一个 Servlet 定义。
+        // 启动 Wrapper 不一定立刻创建 Servlet 实例，但会先把这个“入口”置为可用。
+
         // Send j2ee.state.starting notification
         if (this.getObjectName() != null) {
             Notification notification = new Notification("j2ee.state.starting",
@@ -1586,9 +1608,11 @@ public class StandardWrapper extends ContainerBase
             broadcaster.sendNotification(notification);
         }
 
-        // Start up this component
+        // 继续走容器公共启动逻辑，对 Wrapper 来说主要是启动自己的 pipeline。
+        // 启动 pipeline
         super.startInternal();
 
+        // 0 表示当前已可立即服务。
         setAvailable(0L);
 
         // Send j2ee.state.running notification

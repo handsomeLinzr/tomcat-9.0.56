@@ -296,16 +296,17 @@ public final class Bootstrap {
      */
     public void init() throws Exception {
 
-        // 初始化类加载器，加载 3 个
-        //      commonLoader
-        //      catalinaLoader
-        //      sharedLoader
+        // 第 1 步：先把 Tomcat 启动所需的三层类加载器准备好。
+        // commonLoader   : Tomcat 与 WebApp 共同可见的公共类
+        // catalinaLoader : Catalina 容器内部类
+        // sharedLoader   : 希望额外共享给应用的类
         initClassLoaders();
 
-        // 设置类加载器 catalinaLoader 到当前线程中
+        // 第 2 步：把 catalinaLoader 设为当前线程上下文类加载器。
+        // 后续反射加载 Catalina 及其依赖类时，都会优先从这里找。
         Thread.currentThread().setContextClassLoader(catalinaLoader);
 
-        // 设置安全管理的类加载器，也是这个
+        // 第 3 步：如果启用了安全机制，提前把一些需要预加载的安全相关类装进去。
         SecurityClassLoad.securityClassLoad(catalinaLoader);
 
         // debug
@@ -313,7 +314,8 @@ public final class Bootstrap {
         if (log.isDebugEnabled()) {
             log.debug("Loading startup class");
         }
-        // 反射获取 Catalina 并创建实例
+        // 第 4 步：真正反射创建 Catalina。
+        // 从这里开始，Bootstrap 就只是“外壳”，真正的容器启动逻辑在 Catalina 中。
         Class<?> startupClass = catalinaLoader.loadClass("org.apache.catalina.startup.Catalina");
         Object startupInstance = startupClass.getConstructor().newInstance();
 
@@ -327,13 +329,15 @@ public final class Bootstrap {
         Class<?> paramTypes[] = new Class[1];
         paramTypes[0] = Class.forName("java.lang.ClassLoader");
         Object paramValues[] = new Object[1];
-        // 共享类加载器
+        // sharedLoader 会成为 Catalina 的 parentClassLoader。
+        // 后续 Engine/Host/Context 在创建 WebApp 类加载器时，会沿着这层往上委派。
         paramValues[0] = sharedLoader;
-        // 反射调用方法，设置 Catalina 的类加载器
+        // 反射调用 Catalina.setParentClassLoader(sharedLoader)
         Method method =
             startupInstance.getClass().getMethod(methodName, paramTypes);
         method.invoke(startupInstance, paramValues);
 
+        // 保存 Catalina 实例。后续 load/start/stop 全都通过反射委托给它。
         catalinaDaemon = startupInstance;
     }
 
@@ -344,8 +348,8 @@ public final class Bootstrap {
      */
     private void load(String[] arguments) throws Exception {
 
-        // 反射调用 load 方法
-        // Call the load() method
+        // Bootstrap 本身不懂 server.xml、Lifecycle、Connector 这些细节，
+        // 它只是把 load 请求转发给 Catalina.load(...)。
         String methodName = "load";
         Object param[];
         Class<?> paramTypes[];
@@ -358,7 +362,7 @@ public final class Bootstrap {
             param = new Object[1];
             param[0] = arguments;
         }
-        // 反射调用 catalina.load 方法
+        // 真正进入启动链第二站：Catalina.load()
         Method method =
             catalinaDaemon.getClass().getMethod(methodName, paramTypes);
         if (log.isDebugEnabled()) {
@@ -405,7 +409,8 @@ public final class Bootstrap {
             init();
         }
 
-        // 反射调用 catalina.start 方法启动
+        // Bootstrap.start() 本质就是反射调用 Catalina.start()。
+        // 真正把 Server/Service/Connector 启起来的逻辑在后者里。
         Method method = catalinaDaemon.getClass().getMethod("start", (Class [])null);
         method.invoke(catalinaDaemon, (Object [])null);
     }
@@ -505,18 +510,19 @@ public final class Bootstrap {
      */
     public static void main(String args[]) {
 
+        // 第一段：确保全局只初始化出一个 Bootstrap。
         // 先加锁
         synchronized (daemonLock) {
             // 判断 daemon 为空才需要创建
             // 避免重复创建
             if (daemon == null) {
                 // Don't set daemon until init() has completed
-                // 创建 Bootstrap
-                // 根据路径获取和设置 catalinaHomeFile 和 catalinaBaseFile
+                // 创建 Bootstrap 实例。
+                // 注意 catalina.home / catalina.base 的解析在静态代码块里已经做过了。
                 Bootstrap bootstrap = new Bootstrap();
                 try {
-                    // 初始化
-                    // 初始化类加载器，创建 catalina 对象，设置类加载器
+                    // 这里只做“引导器初始化”，不会真正启动端口监听。
+                    // 结果是得到一个准备就绪的 Catalina 实例。
                     bootstrap.init();
                 } catch (Throwable t) {
                     handleThrowable(t);
@@ -542,19 +548,23 @@ public final class Bootstrap {
 
             if (command.equals("startd")) {
                 args[args.length - 1] = "start";
-                // 反射调用 catalina.start 方法
+                // startd 多用于后台守护方式启动。
                 daemon.load(args);
                 daemon.start();
             } else if (command.equals("stopd")) {
                 args[args.length - 1] = "stop";
                 daemon.stop();
             } else if (command.equals("start")) {
-                // 启动 tomcat 服务
-                // 设置标识
+                // 这是最常见的启动分支：
+                // 1. 先 setAwait(true) 表示主线程启动完后要阻塞等待关闭命令
+                // 2. 再 load() 解析配置、构造对象并做 init
+                // 3. 最后 start() 进入真正的生命周期启动
                 daemon.setAwait(true);
-                // 加载守护线程，会反射调用到 catalina.load 方法
+                // 这里会走到 Catalina.load()：
+                // parse server.xml -> 创建 StandardServer/Service/Connector/... -> server.init()
                 daemon.load(args);
-                // 启动，反射调用 catalina.start 启动
+                // 这里会走到 Catalina.start()：
+                // server.start() -> service.start() -> connector.start() -> 端口开始监听
                 daemon.start();
                 if (null == daemon.getServer()) {
                     System.exit(1);

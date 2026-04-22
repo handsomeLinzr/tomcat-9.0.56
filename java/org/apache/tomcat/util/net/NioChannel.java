@@ -38,8 +38,11 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
 
     protected static final ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
+    // SocketBufferHandler, socket 缓存
     protected final SocketBufferHandler bufHandler;
+    // 接收到的 socketChannel 对象
     protected SocketChannel sc = null;
+    // 对应的 NioChannel 包装
     protected NioSocketWrapper socketWrapper = null;
 
     public NioChannel(SocketBufferHandler bufHandler) {
@@ -56,6 +59,7 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
     public void reset(SocketChannel channel, NioSocketWrapper socketWrapper) throws IOException {
         this.sc = channel;
         this.socketWrapper = socketWrapper;
+        // 清空重置缓存数据
         bufHandler.reset();
     }
 

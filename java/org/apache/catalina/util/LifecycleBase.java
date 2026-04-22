@@ -42,6 +42,8 @@ public abstract class LifecycleBase implements Lifecycle {
 
 
     // 生命周期的监听器
+    // Server -> NamingContextListener
+    // context -> NamingContextListener
     /**
      * The list of registered LifecycleListeners for event notifications.
      */
@@ -145,10 +147,9 @@ public abstract class LifecycleBase implements Lifecycle {
         }
 
         try {
-            // 生命周期流转过程
-            // 先设置 INITIALIZING
-            // 然后调用 initInternal
-            // 最后设置 INITIALIZED
+            // LifecycleBase 是所有核心组件共用的生命周期模板。
+            // init() 的职责不是做具体初始化，而是统一控制状态流转：
+            // NEW -> INITIALIZING -> 调子类 initInternal() -> INITIALIZED
             setStateInternal(LifecycleState.INITIALIZING, null, false);
             initInternal();
             setStateInternal(LifecycleState.INITIALIZED, null, false);
@@ -188,23 +189,31 @@ public abstract class LifecycleBase implements Lifecycle {
             return;
         }
 
-        // 过程状态判断
+        // start() 同样是模板方法。
+        // 它先把组件带到一个允许启动的状态，再调用子类自己的 startInternal()。
         if (state.equals(LifecycleState.NEW)) {
-            // 如果是 NEW 状态，则先调 init 初始化
+            // 如果组件还从未初始化，start() 会自动补一次 init()。
             init();
         } else if (state.equals(LifecycleState.FAILED)) {
-            // 如果是 FAILED 失败状态，则调用 stop 停止
+            // 失败状态会先尝试进入 stop 清理流程。
             stop();
         } else if (!state.equals(LifecycleState.INITIALIZED) &&
                 !state.equals(LifecycleState.STOPPED)) {
             invalidTransition(Lifecycle.BEFORE_START_EVENT);
         }
 
-        // 这里才是通常情况下走的 start 逻辑
+        // 真正的启动模板：
+        // INITIALIZED/STOPPED -> STARTING_PREP -> 调子类 startInternal()
+        // 子类必须在 startInternal() 内把自己推进到 STARTING
+        // 最后父类统一补到 STARTED
         try {
-            // 设置状态为 STARTING_PREP，开始前
+            // 开始前置状态，表示“准备启动，但子类逻辑还没开始真正工作”。
+            // 启动 before_start 事件
             setStateInternal(LifecycleState.STARTING_PREP, null, false);
-            // 调用子类重新的 startInternal 方法，进行自定义 start 处理
+            // 真正的组件启动逻辑由子类实现，例如：
+            // StandardServer.startInternal()
+            // StandardService.startInternal()
+            // Connector.startInternal()
             startInternal();
             if (state.equals(LifecycleState.FAILED)) {
                 // 如果 start 后，状态变成 FAILED 失败状态，则调用 stop 停止
@@ -462,7 +471,7 @@ public abstract class LifecycleBase implements Lifecycle {
 
         // 转换状态，改为新状态
         this.state = state;
-        // 获取状态对应的声明周期
+        // 获取状态对应的声明周期事件
         String lifecycleEvent = state.getLifecycleEvent();
         if (lifecycleEvent != null) {
             // 如果生命周期不为空（只有 NEW 和 FAILED 才会为空）

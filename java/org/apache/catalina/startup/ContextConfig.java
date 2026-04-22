@@ -189,6 +189,7 @@ public class ContextConfig implements LifecycleListener {
     protected volatile Context context = null;
 
 
+    // 默认 conf/web.xml
     /**
      * The default web application's deployment descriptor location.
      */
@@ -292,6 +293,7 @@ public class ContextConfig implements LifecycleListener {
 
         // Identify the context we are associated with
         try {
+            // 对应 context 本身
             context = (Context) event.getLifecycle();
         } catch (ClassCastException e) {
             log.error(sm.getString("contextConfig.cce", event.getLifecycle()), e);
@@ -300,8 +302,10 @@ public class ContextConfig implements LifecycleListener {
 
         // Process the event that has occurred
         if (event.getType().equals(Lifecycle.CONFIGURE_START_EVENT)) {
+            // 启动配置处理事件
             configureStart();
         } else if (event.getType().equals(Lifecycle.BEFORE_START_EVENT)) {
+            // 启动前
             beforeStart();
         } else if (event.getType().equals(Lifecycle.AFTER_START_EVENT)) {
             // Restore docBase for management tools
@@ -899,6 +903,7 @@ public class ContextConfig implements LifecycleListener {
             ContextName cn = new ContextName(path, context.getWebappVersion());
             docBase = cn.getBaseName();
 
+            // 获取 tmp 目录
             String tmp = System.getProperty("java.io.tmpdir");
             File tmpFile = new File(tmp);
             if (!tmpFile.isDirectory()) {
@@ -983,6 +988,7 @@ public class ContextConfig implements LifecycleListener {
                     Boolean.valueOf(context.getXmlNamespaceAware())));
         }
 
+        // 解析 web.xml，包括 servlet 解析成 wrapper，和设置对应的匹配关系和参数都在这处理完成
         webConfig();
 
         if (!context.getIgnoreAnnotations()) {
@@ -1015,6 +1021,7 @@ public class ContextConfig implements LifecycleListener {
 
         // Make our application available if no problems were encountered
         if (ok) {
+            // 设置配置应处理完成
             context.setConfigured(true);
         } else {
             log.error(sm.getString("contextConfig.unavailable"));
@@ -1261,26 +1268,34 @@ public class ContextConfig implements LifecycleListener {
          *   those in JARs excluded from an absolute ordering) need to be
          *   scanned to check if they match.
          */
-        WebXmlParser webXmlParser = new WebXmlParser(context.getXmlNamespaceAware(),
+        WebXmlParser webXmlParser = new WebXmlParser(context.getXmlNamespaceAware(), // webXml 解析器
                 context.getXmlValidation(), context.getXmlBlockExternal());
 
         Set<WebXml> defaults = new HashSet<>();
+        // 获取默认的 web.xml，即 conf/web.xml，解析成一个 WebXml 对象
+        // 添加到 defaults 中
         defaults.add(getDefaultWebXmlFragment(webXmlParser));
 
+        // 解析当前具体 /WEB-INF/tomcat-web.xml 文件，并添加到 tomcatWebXml 中
         Set<WebXml> tomcatWebXml = new HashSet<>();
         tomcatWebXml.add(getTomcatWebXmlFragment(webXmlParser));
 
         WebXml webXml = createWebXml();
 
+        // 解析 context 的 web.xml 文件，对应 /WEB-INF/web.xml
         // Parse context level web.xml
         InputSource contextWebXml = getContextWebXmlSource();
+        // 解析 /WEB-INF/web.xml，解析到 webXml 中
         if (!webXmlParser.parseWebXml(contextWebXml, webXml, false)) {
             ok = false;
         }
 
+        // ApplicationContextFacade
         ServletContext sContext = context.getServletContext();
 
+        // 详细步骤
         // Ordering is important here
+        // 解析 jar 包
 
         // Step 1. Identify all the JARs packaged with the application and those
         // provided by the container. If any of the application JARs have a
@@ -1293,6 +1308,7 @@ public class ContextConfig implements LifecycleListener {
         orderedFragments =
                 WebXml.orderWebFragments(webXml, fragments, sContext);
 
+        // 寻找 ServletContainerInitializer 实现
         // Step 3. Look for ServletContainerInitializer implementations
         if (ok) {
             processServletContainerInitializers();
@@ -1307,6 +1323,7 @@ public class ContextConfig implements LifecycleListener {
             // Step 6. Merge web-fragment.xml files into the main web.xml
             // file.
             if (ok) {
+                // 合并
                 ok = webXml.merge(orderedFragments);
             }
 
@@ -1339,6 +1356,7 @@ public class ContextConfig implements LifecycleListener {
             log.info(sm.getString("contextConfig.effectiveWebXml", webXml.toXml()));
         }
 
+        // 静态资源
         // Always need to look for static resources
         // Step 10. Look for static resources packaged in JARs
         if (ok) {
@@ -1386,6 +1404,7 @@ public class ContextConfig implements LifecycleListener {
         }
 
         if (ok) {
+            // 获取文件列表
             WebResource[] webResources =
                     context.getResources().listResources("/WEB-INF/classes");
 
@@ -1395,6 +1414,7 @@ public class ContextConfig implements LifecycleListener {
                 if ("META-INF".equals(webResource.getName())) {
                     continue;
                 }
+                // 处理 WEB-INF/classes 下文件的注解
                 processAnnotationsWebResource(webResource, webXml,
                         webXml.isMetadataComplete(), javaClassCache);
             }
@@ -1405,6 +1425,7 @@ public class ContextConfig implements LifecycleListener {
         // are going to use (remember orderedFragments includes any
         // container fragments)
         if (ok) {
+            // 处理注解
             processAnnotations(
                     orderedFragments, webXml.isMetadataComplete(), javaClassCache);
         }
@@ -1502,7 +1523,9 @@ public class ContextConfig implements LifecycleListener {
         for (ContextService service : webxml.getServiceRefs().values()) {
             context.getNamingResources().addService(service);
         }
+        // 处理 servlet
         for (ServletDef servlet : webxml.getServlets().values()) {
+            // 创建 wrapper
             Wrapper wrapper = context.createWrapper();
             // Description is ignored
             // Display name is ignored
@@ -1510,13 +1533,17 @@ public class ContextConfig implements LifecycleListener {
 
             // jsp-file gets passed to the JSP Servlet as an init-param
 
+            // 通过对应的 servlet 的属性，给 wrapper 设置对应的属性
             if (servlet.getLoadOnStartup() != null) {
                 wrapper.setLoadOnStartup(servlet.getLoadOnStartup().intValue());
             }
             if (servlet.getEnabled() != null) {
                 wrapper.setEnabled(servlet.getEnabled().booleanValue());
             }
+            // 设置名称
             wrapper.setName(servlet.getServletName());
+
+            // 启动参数
             Map<String,String> params = servlet.getParameterMap();
             for (Entry<String, String> entry : params.entrySet()) {
                 wrapper.addInitParameter(entry.getKey(), entry.getValue());
@@ -1527,6 +1554,7 @@ public class ContextConfig implements LifecycleListener {
                 wrapper.addSecurityReference(
                         roleRef.getName(), roleRef.getLink());
             }
+            // 设置对应的 servlet 类
             wrapper.setServletClass(servlet.getServletClass());
             MultipartDef multipartdef = servlet.getMultipartDef();
             if (multipartdef != null) {
@@ -1555,10 +1583,14 @@ public class ContextConfig implements LifecycleListener {
                         servlet.getAsyncSupported().booleanValue());
             }
             wrapper.setOverridable(servlet.isOverridable());
+            // 重点，添加到 context 下
             context.addChild(wrapper);
         }
+
+        // 获取对应的 servet 映射
         for (Entry<String, String> entry :
                 webxml.getServletMappings().entrySet()) {
+            // 设置到 context
             context.addServletMappingDecoded(entry.getKey(), entry.getValue());
         }
         SessionConfig sessionConfig = webxml.getSessionConfig();
@@ -1590,6 +1622,7 @@ public class ContextConfig implements LifecycleListener {
 
         // Context doesn't use version directly
 
+        // 获取默认的 welcome 文件
         for (String welcomeFile : webxml.getWelcomeFiles()) {
             /*
              * The following will result in a welcome file of "" so don't add
@@ -1599,6 +1632,7 @@ public class ContextConfig implements LifecycleListener {
              * </welcome-file-list>
              */
             if (welcomeFile != null && welcomeFile.length() > 0) {
+                // 添加
                 context.addWelcomeFile(welcomeFile);
             }
         }
@@ -1606,10 +1640,12 @@ public class ContextConfig implements LifecycleListener {
         // Do this last as it depends on servlets
         for (JspPropertyGroup jspPropertyGroup :
                 webxml.getJspPropertyGroups()) {
+            // jsp
             String jspServletName = context.findServletMapping("*.jsp");
             if (jspServletName == null) {
                 jspServletName = "jsp";
             }
+            // 默认得到 org.apache.jasper.servlet.JspServlet
             if (context.findChild(jspServletName) != null) {
                 for (String urlPattern : jspPropertyGroup.getUrlPatterns()) {
                     context.addServletMappingDecoded(urlPattern, jspServletName, true);
@@ -1624,11 +1660,13 @@ public class ContextConfig implements LifecycleListener {
             }
         }
 
+        // 设置对应的启动后方法
         for (Entry<String, String> entry :
                 webxml.getPostConstructMethods().entrySet()) {
             context.addPostConstructMethod(entry.getKey(), entry.getValue());
         }
 
+        // 设置对应的销毁前方法
         for (Entry<String, String> entry :
             webxml.getPreDestroyMethods().entrySet()) {
             context.addPreDestroyMethod(entry.getKey(), entry.getValue());
@@ -1649,6 +1687,7 @@ public class ContextConfig implements LifecycleListener {
         // not defined any welcomes files.
         webXmlTomcatFragment.setAlwaysAddWelcomeFiles(false);
 
+        // 获取 /WEB-INF/tomcat-web.xml
         WebResource resource = context.getResources().getResource(Constants.TomcatWebXml);
         if (resource.isFile()) {
             try {
@@ -1667,11 +1706,14 @@ public class ContextConfig implements LifecycleListener {
 
     private WebXml getDefaultWebXmlFragment(WebXmlParser webXmlParser) {
 
+        // 获取当前解析的对应的 host
         // Host should never be null
         Host host = (Host) context.getParent();
 
+        // 缓存中先获取
         DefaultWebXmlCacheEntry entry = hostWebXmlCache.get(host);
 
+        // 获取到 conf/web.xml 的输入流
         InputSource globalWebXml = getGlobalWebXmlSource();
         InputSource hostWebXml = getHostWebXmlSource();
 
@@ -1735,6 +1777,7 @@ public class ContextConfig implements LifecycleListener {
                 return entry.getWebXml();
             }
 
+            // 创建一个 WebXml
             WebXml webXmlDefaultFragment = createWebXml();
             webXmlDefaultFragment.setOverridable(true);
             // Set to distributable else every app will be prevented from being
@@ -1750,6 +1793,7 @@ public class ContextConfig implements LifecycleListener {
                 // This is unusual enough to log
                 log.info(sm.getString("contextConfig.defaultMissing"));
             } else {
+                // 解析 globalWebXml，也就是 conf/web.xml 文件，到 webXmlDefaultFragment 中
                 if (!webXmlParser.parseWebXml(
                         globalWebXml, webXmlDefaultFragment, false)) {
                     ok = false;
@@ -1934,6 +1978,7 @@ public class ContextConfig implements LifecycleListener {
     }
 
 
+    // 获取默认的 conf/web.xml 对应的文件输入流
     /**
      * Identify the default web.xml to be used and obtain an input source for
      * it.
@@ -1946,6 +1991,7 @@ public class ContextConfig implements LifecycleListener {
         }
         // Set the default if we don't have any overrides
         if (defaultWebXml == null) {
+            // 获取默认的 webXml，默认是 conf/web.xml
             getDefaultWebXml();
         }
 
@@ -1953,6 +1999,7 @@ public class ContextConfig implements LifecycleListener {
         if (Constants.NoDefaultWebXml.equals(defaultWebXml)) {
             return null;
         }
+        // 获取默认的 conf/web.xml 的文件输入流
         return getWebXmlSource(defaultWebXml, true);
     }
 
@@ -1983,6 +2030,7 @@ public class ContextConfig implements LifecycleListener {
 
         String altDDName = null;
 
+        // 获取到 context 下的 ApplicationContext 的 ApplicationContextFacade
         // Open the application web.xml file, if it exists
         ServletContext servletContext = context.getServletContext();
         try {
@@ -1999,9 +2047,11 @@ public class ContextConfig implements LifecycleListener {
                         log.error(sm.getString("contextConfig.applicationUrl"));
                     }
                 } else {
+                    // 获取 /WEB-INF/web.xml 的输入流
                     stream = servletContext.getResourceAsStream
                         (Constants.ApplicationWebXml);
                     try {
+                        // 转化为 url
                         url = servletContext.getResource(
                                 Constants.ApplicationWebXml);
                     } catch (MalformedURLException e) {
@@ -2014,12 +2064,14 @@ public class ContextConfig implements LifecycleListener {
                     log.debug(sm.getString("contextConfig.applicationMissing") + " " + context);
                 }
             } else {
+                // 解析成 source
                 source = new InputSource(url.toExternalForm());
                 source.setByteStream(stream);
             }
         } finally {
             if (source == null && stream != null) {
                 try {
+                    // 关闭流
                     stream.close();
                 } catch (IOException e) {
                     // Ignore
@@ -2027,6 +2079,7 @@ public class ContextConfig implements LifecycleListener {
             }
         }
 
+        // 返回输入流
         return source;
     }
 

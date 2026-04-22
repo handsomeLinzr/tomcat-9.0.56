@@ -159,6 +159,7 @@ public final class ApplicationFilterChain implements FilterChain {
                 }
             }
         } else {
+            // 处理过滤器
             internalDoFilter(request,response);
         }
     }
@@ -167,7 +168,8 @@ public final class ApplicationFilterChain implements FilterChain {
                                   ServletResponse response)
         throws IOException, ServletException {
 
-        // Call the next filter if there is one
+        // 标准责任链模型：
+        // 有下一个 Filter 就继续调 Filter；没有了才会进入目标 Servlet。
         if (pos < n) {
             ApplicationFilterConfig filterConfig = filters[pos++];
             try {
@@ -175,6 +177,7 @@ public final class ApplicationFilterChain implements FilterChain {
 
                 if (request.isAsyncSupported() && "false".equalsIgnoreCase(
                         filterConfig.getFilterDef().getAsyncSupported())) {
+                    // 链上只要某个 Filter 不支持 async，后续链路整体都要降级。
                     request.setAttribute(Globals.ASYNC_SUPPORTED_ATTR, Boolean.FALSE);
                 }
                 if( Globals.IS_SECURITY_ENABLED ) {
@@ -186,6 +189,7 @@ public final class ApplicationFilterChain implements FilterChain {
                     Object[] args = new Object[]{req, res, this};
                     SecurityUtil.doAsPrivilege ("doFilter", filter, classType, args, principal);
                 } else {
+                    // 执行过滤器逻辑
                     filter.doFilter(request, response, this);
                 }
             } catch (IOException | ServletException | RuntimeException e) {
@@ -198,7 +202,7 @@ public final class ApplicationFilterChain implements FilterChain {
             return;
         }
 
-        // We fell off the end of the chain -- call the servlet instance
+        // 责任链走到底，最终进入 servlet.service()。
         try {
             if (ApplicationDispatcher.WRAP_SAME_OBJECT) {
                 lastServicedRequest.set(request);
@@ -209,7 +213,7 @@ public final class ApplicationFilterChain implements FilterChain {
                 request.setAttribute(Globals.ASYNC_SUPPORTED_ATTR,
                         Boolean.FALSE);
             }
-            // Use potentially wrapped request from this point
+            // 注意这里拿到的 request/response 可能已经被多个 Filter 包装过。
             if ((request instanceof HttpServletRequest) &&
                     (response instanceof HttpServletResponse) &&
                     Globals.IS_SECURITY_ENABLED ) {
@@ -224,6 +228,7 @@ public final class ApplicationFilterChain implements FilterChain {
                                            args,
                                            principal);
             } else {
+                // 真正进入业务 Servlet 的位置。
                 servlet.service(request, response);
             }
         } catch (IOException | ServletException | RuntimeException e) {

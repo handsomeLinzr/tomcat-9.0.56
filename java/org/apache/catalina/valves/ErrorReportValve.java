@@ -88,6 +88,7 @@ public class ErrorReportValve extends ValveBase {
     @Override
     public void invoke(Request request, Response response) throws IOException, ServletException {
 
+        // 调用下一个节点，调用 invoke 处理，这里调用到了 StandardHostValve
         // Perform the request
         getNext().invoke(request, response);
 

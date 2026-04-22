@@ -67,6 +67,7 @@ public class StandardRoot extends LifecycleMBeanBase implements WebResourceRoot 
     private static final Log log = LogFactory.getLog(StandardRoot.class);
     protected static final StringManager sm = StringManager.getManager(StandardRoot.class);
 
+    // 构造函数这是了对应的 context
     private Context context;
     private boolean allowLinking = false;
     private final List<WebResourceSet> preResources = new ArrayList<>();
@@ -590,10 +591,12 @@ public class StandardRoot extends LifecycleMBeanBase implements WebResourceRoot 
      *                            application from starting
      */
     protected void processWebInfLib() throws LifecycleException {
+        // 获取 lib 下的以来 jar
         WebResource[] possibleJars = listResources("/WEB-INF/lib", false);
 
         for (WebResource possibleJar : possibleJars) {
             if (possibleJar.isFile() && possibleJar.getName().endsWith(".jar")) {
+                // 添加到对应的 list 下
                 createWebResourceSet(ResourceSetType.CLASSES_JAR,
                         "/WEB-INF/classes", possibleJar.getURL(), "/");
             }
@@ -716,6 +719,7 @@ public class StandardRoot extends LifecycleMBeanBase implements WebResourceRoot 
     protected void startInternal() throws LifecycleException {
         mainResources.clear();
 
+        // 创建主要的资源集
         main = createMainResourceSet();
 
         mainResources.add(main);

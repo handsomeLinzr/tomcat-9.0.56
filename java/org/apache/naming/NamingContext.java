@@ -115,6 +115,7 @@ public class NamingContext implements Context {
     protected static final StringManager sm = StringManager.getManager(NamingContext.class);
 
 
+    // new HashMap，构造函数
     /**
      * Bindings in this Context.
      */

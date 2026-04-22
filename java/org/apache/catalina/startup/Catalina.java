@@ -118,6 +118,7 @@ public class Catalina {
     protected boolean useShutdownHook = true;
 
 
+    // 关闭构钩子函数  CatalinaShutdownHook
     /**
      * Shutdown hook.
      */
@@ -378,8 +379,9 @@ public class Catalina {
      * @return the main digester to parse server.xml
      */
     protected Digester createStartDigester() {
-        // Initialize the digester
-        // 初始化 Digester
+        // Digester 可以理解为“按规则把 XML 直接装配成对象图”的工具。
+        // Tomcat 启动时不是手写一堆 if/else 去 new 对象，而是把规则提前注册给 Digester。
+        // 解析 server.xml 时，它会一边读标签，一边创建并组装 StandardServer / Service / Connector 等对象。
         Digester digester = new Digester();
         // 设置校验 false
         digester.setValidating(false);
@@ -412,9 +414,13 @@ public class Catalina {
         digester.setFakeAttributes(fakeAttributes);
         digester.setUseContextClassLoader(true);
 
-        // 配置需要使用的类
-        // Configure the actions we will be using
-        // 添加新的规则 ObjectCreateRule
+        // 下面这一大段规则，就是 server.xml 到运行时对象树的“翻译器”。
+        // 例如：
+        // <Server>                   -> StandardServer
+        // <Server><Service>          -> StandardService
+        // <Service><Connector>       -> Connector
+        // <Service><Engine>          -> StandardEngine
+        // 更深层的 Host/Context/Wrapper 交给对应 RuleSet 继续展开。
         digester.addObjectCreate("Server",
                                  "org.apache.catalina.core.StandardServer",
                                  "className");
@@ -519,7 +525,7 @@ public class Catalina {
                             "addUpgradeProtocol",
                             "org.apache.coyote.UpgradeProtocol");
 
-        // Add RuleSets for nested elements
+        // Engine/Host/Context 下还有很多子标签，这里通过 RuleSet 批量注册规则。
         digester.addRuleSet(new NamingRuleSet("Server/GlobalNamingResources/"));
         digester.addRuleSet(new EngineRuleSet("Server/Service/"));
         digester.addRuleSet(new HostRuleSet("Server/Service/Engine/"));
@@ -527,7 +533,8 @@ public class Catalina {
         addClusterRuleSet(digester, "Server/Service/Engine/Host/Cluster/");
         digester.addRuleSet(new NamingRuleSet("Server/Service/Engine/Host/Context/"));
 
-        // When the 'engine' is found, set the parentClassLoader.
+        // 当解析到 Engine 时，把 Bootstrap 传下来的 parentClassLoader 绑定进去。
+        // 这一步会影响后续 Web 应用类加载器的父加载器链。
         digester.addRule("Server/Service/Engine",
                          new SetParentClassLoaderRule(parentClassLoader));
         addClusterRuleSet(digester, "Server/Service/Engine/Cluster/");
@@ -648,22 +655,23 @@ public class Catalina {
         } else {
             // 获取到 server.xml 文件 resource
             try (ConfigurationSource.Resource resource = ConfigFileLoader.getSource().getServerXml()) {
-                // Create and execute our Digester
-                // 创建并启动外部 Digester，这里先默认 start = true
-                // 在 Digester 中添加了很多的规则，比如 server 那些
+                // 这里才真正开始把 server.xml 解析成对象。
+                // 重点是 digester.push(this)：
+                // 当前 Catalina 自己会先压栈，这样解析到 <Server> 后就能回调 Catalina.setServer(...)
                 Digester digester = start ? createStartDigester() : createStopDigester();
 
                 // 获取 server.xml 文件的输入流
                 InputStream inputStream = resource.getInputStream();
                 InputSource inputSource = new InputSource(resource.getURI().toURL().toString());
                 inputSource.setByteStream(inputStream);
-                // 将当前的 catalina 推到 digester 栈顶
+                // 栈顶初始是 Catalina，本次解析出来的 StandardServer 会挂回到它身上。
                 digester.push(this);
                 if (generateCode) {
                     digester.startGeneratingCode();
                     generateClassHeader(digester, start);
                 }
-                // 解析 server.xml 输入流
+                // 一旦 parse 完成，对象图基本就有了：
+                // Catalina -> StandardServer -> StandardService -> Connector / Engine -> Host -> ...
                 digester.parse(inputSource);
                 if (generateCode) {
                     generateClassFooter(digester);
@@ -754,38 +762,37 @@ public class Catalina {
         // 当前时间
         long t1 = System.nanoTime();
 
-        // 初始化文件目录，默认空实现
-        // tomcat10将要移除
+        // 这里历史上用于准备目录，Tomcat 9 中已经基本是空实现。
         initDirs();
 
-        // 设置 naming 相关的系统配置变量
-        // Before digester - it may be needed
+        // 先准备 JNDI/Naming 相关系统属性，因为 server.xml 解析和后续组件初始化可能依赖它。
         initNaming();
 
-        // 解析 server.xml 文件，server.xml 就是为了启动 server 实例的
-        // Parse main server.xml
-        // 走完这里，其实已经创建了一个 Server 对象，并且已经调用 setServer 设置进去了
+        // 第 1 步：解析 server.xml，构造整个 Tomcat 运行时对象图。
+        // 执行完这里以后，StandardServer/Service/Connector/Engine/Host 基本都已经 new 出来了。
         parseServerXml(true);
-        // 获取 server 实例，StandardServer
+        // Catalina 持有的顶层对象就是 StandardServer。
         Server s = getServer();
         if (s == null) {
             return;
         }
 
-        // 设置对应 server 的关联 catalina 是当前对象
+        // 第 2 步：把一些运行时环境信息回填给 Server。
         getServer().setCatalina(this);
-        // 设置对应的 catalina 路径
         getServer().setCatalinaHome(Bootstrap.getCatalinaHomeFile());
         getServer().setCatalinaBase(Bootstrap.getCatalinaBaseFile());
 
-        // 初始化流，其实就是输入输出流，可以忽略
-        // Stream redirection
+        // 第 3 步：重定向 System.out / System.err，方便统一日志处理。
         initStreams();
 
-        // Start the new server
         try {
-            // 初始化 server
-            // 调用到了生命周期
+            // 第 4 步：这里只做 init，不做 start。
+            // 调用链会进入 LifecycleBase.init()
+            // -> StandardServer.initInternal()
+            // -> StandardService.initInternal()
+            // -> Connector.initInternal()
+            // -> ProtocolHandler.init()
+            // 做完这一步，则接收器 NioEndpoint 也应 init 了，准备好了 serverSocket，并设置好了配置参数
             getServer().init();
         } catch (LifecycleException e) {
             if (Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE")) {
@@ -838,10 +845,16 @@ public class Catalina {
 
         long t1 = System.nanoTime();
 
-        // Start the new server
         try {
-            // 调用 server 的 start，启动 standardServer 服务
-            // 继续走到 LifecycleBase 声明周期类
+            // 进入真正的启动阶段。
+            // 这里的调用链大致是：
+            // StandardServer.start()
+            // -> StandardService.start()
+            // -> Engine.start()
+            // -> MapperListener.start()
+            // -> Connector.start()
+            // -> ProtocolHandler.start()
+            // -> Endpoint.start()
             getServer().start();
         } catch (LifecycleException e) {
             log.fatal(sm.getString("catalina.serverStartFail"), e);
@@ -865,6 +878,7 @@ public class Catalina {
         // Register shutdown hook
         if (useShutdownHook) {
             if (shutdownHook == null) {
+                // catalina 关闭事件
                 shutdownHook = new CatalinaShutdownHook();
             }
             Runtime.getRuntime().addShutdownHook(shutdownHook);
@@ -879,6 +893,8 @@ public class Catalina {
             }
         }
 
+        // Bootstrap.main("start") 里已经把 await 设成 true。
+        // 所以正常独立启动模式下，这里会阻塞主线程等待 shutdown 口令。
         if (await) {
             await();
             stop();
@@ -1019,6 +1035,7 @@ public class Catalina {
     }
 
 
+    // 源码编译解析
     protected void generateLoader() {
         String loaderClassName = "DigesterGeneratedCodeLoader";
         StringBuilder code = new StringBuilder();
@@ -1071,6 +1088,7 @@ public class Catalina {
 
     // --------------------------------------- CatalinaShutdownHook Inner Class
 
+    // catalina 关闭事件，本质是调用 stop 方法
     // XXX Should be moved to embedded !
     /**
      * Shutdown hook which will perform a clean shutdown of Catalina if needed.

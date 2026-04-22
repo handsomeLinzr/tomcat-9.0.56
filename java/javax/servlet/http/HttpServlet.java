@@ -761,6 +761,7 @@ public abstract class HttpServlet extends GenericServlet {
         } catch (ClassCastException e) {
             throw new ServletException(lStrings.getString("http.non_http"));
         }
+        // 执行业务逻辑
         service(request, response);
     }
 

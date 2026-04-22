@@ -55,6 +55,7 @@ public abstract class ValveBase extends LifecycleMBeanBase implements Contained,
 
     //------------------------------------------------------ Instance Variables
 
+    // StandardEngineValve 的构造函数默认 true
     /**
      * Does this valve support Servlet 3+ async requests?
      */

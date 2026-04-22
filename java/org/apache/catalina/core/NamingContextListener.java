@@ -95,11 +95,13 @@ public class NamingContextListener
     protected String name = "/";
 
 
+    // 触发事件本身
     /**
      * Associated container.
      */
     protected Object container = null;
 
+    // 从 context 中拿到的 token
     /**
      * Token for configuring associated JNDI context.
      */
@@ -111,12 +113,14 @@ public class NamingContextListener
     protected boolean initialized = false;
 
 
+    // 默认是从 context 中拿到的 NamingResourcesImpl
     /**
      * Associated naming resources.
      */
     protected NamingResourcesImpl namingResources = null;
 
 
+    // NamingContext
     /**
      * Associated JNDI context.
      */
@@ -198,6 +202,7 @@ public class NamingContextListener
 
     // ---------------------------------------------- LifecycleListener Methods
 
+    // 在 context 的 start 的时候，调用触发监听事件 CONFIGURE_START_EVENT 的时候，会调用到这里
     /**
      * Acknowledge the occurrence of the specified event.
      *
@@ -206,7 +211,7 @@ public class NamingContextListener
     @Override
     public void lifecycleEvent(LifecycleEvent event) {
 
-        // 获取容器
+        // 获取当前的事件触发的容器对象
         container = event.getLifecycle();
 
 
@@ -233,6 +238,7 @@ public class NamingContextListener
 
             try {
                 Hashtable<String, Object> contextEnv = new Hashtable<>();
+                // 设置 namingContext
                 namingContext = new NamingContext(contextEnv, getName());
                 ContextAccessController.setSecurityToken(getName(), token);
                 ContextAccessController.setSecurityToken(container, token);

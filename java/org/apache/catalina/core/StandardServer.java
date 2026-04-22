@@ -61,7 +61,7 @@ import org.apache.tomcat.util.modeler.Registry;
 import org.apache.tomcat.util.res.StringManager;
 import org.apache.tomcat.util.threads.TaskThreadFactory;
 
-
+// 有监听器 NamingContextListener
 /**
  * Standard implementation of the <b>Server</b> interface, available for use
  * (but not required) when deploying and starting Catalina.
@@ -88,6 +88,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
         //  设置和当前这个 Server 关联
         globalNamingResources.setContainer(this);
 
+        // 默认 true
         if (isUseNaming()) {
             // 默认true，添加监听器
             namingContextListener = new NamingContextListener();
@@ -162,6 +163,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
 
     private volatile boolean stopAwait = false;
 
+    // 设置关联的 catalina
     private Catalina catalina = null;
 
     private ClassLoader parentClassLoader = null;
@@ -179,6 +181,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     // 对应的 catalina 路径
     private File catalinaHome = null;
 
+    // 设置关联的 catalina 的 base 路径
     private File catalinaBase = null;
 
     private final Object namingToken = new Object();
@@ -211,6 +214,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
      * Controller for the periodic lifecycle event.
      */
     private ScheduledFuture<?> periodicLifecycleEventFuture = null;
+    // 生命周期周期性任务监控
     private ScheduledFuture<?> monitorFuture;
 
 
@@ -936,24 +940,29 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     @Override
     protected void startInternal() throws LifecycleException {
 
+        // StandardServer 是整个 Tomcat 进程级对象。
+        // 到这里说明 Catalina.start() 已经把控制权正式交给生命周期框架。
+        // 后续它要做的事情很简单：先把自己标成 STARTING，再驱动所有 Service 启动。
+
         // 传递配置启动事件
         fireLifecycleEvent(CONFIGURE_START_EVENT, null);
         // 设置当前的生命周期状态为启动中 STARTING
         setState(LifecycleState.STARTING);
 
-        // 启动全局资源
+        // 全局 JNDI 资源先启动，供各个 Service/Context 后续使用。
         globalNamingResources.start();
 
-        // Start our defined Services
+        // 重点中的重点：
+        // Server 下面可能有多个 Service，这里会逐个启动。
+        // 默认配置通常只有一个 Service，名字一般叫 Catalina。
         synchronized (servicesLock) {
-            // 重点，遍历所有的 service，调用 start 方法
             for (Service service : services) {
                 service.start();
             }
         }
 
         if (periodicEventDelay > 0) {
-            // 监控
+            // 可选：启动周期性生命周期事件任务。
             monitorFuture = getUtilityExecutor().scheduleWithFixedDelay(
                     () -> startPeriodicLifecycleEvent(), 0, 60, TimeUnit.SECONDS);
         }
@@ -1020,9 +1029,8 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
 
         super.initInternal();
 
-        // 初始化执行器线程池
-        // getUtilityThreadsInternal(utilityThreads) 对线程数继续处理，最小是2
-        // Initialize utility executor
+        // init 阶段先准备 Server 级公共线程池。
+        // 后面 ProtocolHandler、后台定时任务等都会复用它。
         reconfigureUtilityExecutor(getUtilityThreadsInternal(utilityThreads));
         // 注册名称
         register(utilityExecutor, "type=UtilityExecutor");
@@ -1038,8 +1046,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
         factory.setContainer(this);
         onameMBeanFactory = register(factory, "type=MBeanFactory");
 
-        // 调用 NamingResourcesImpl
-        // Register the naming resources
+        // 初始化全局命名资源。
         globalNamingResources.init();
 
         // Populate the extension validator with JARs from common and shared
@@ -1069,8 +1076,8 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
                 cl = cl.getParent();
             }
         }
-        // 初始化定义的 services
-        // Initialize our defined Services
+        // 继续把 init 动作向下传递给每个 Service。
+        // 这一步还不会真正监听端口，只是把 Connector/Engine 等组件准备好。
         for (Service service : services) {
             service.init();
         }

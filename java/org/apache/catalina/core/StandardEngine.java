@@ -43,6 +43,7 @@ import org.apache.catalina.util.ServerInfo;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 
+// 从 engine 开始是容器，继承了 ContainerBase
 /**
  * Standard implementation of the <b>Engine</b> interface.  Each
  * child container must be a Host implementation to process the specific
@@ -65,6 +66,7 @@ public class StandardEngine extends ContainerBase implements Engine {
     public StandardEngine() {
 
         super();
+        // 设置 pipeline，组装责任链
         pipeline.setBasic(new StandardEngineValve());
         /* Set the jmvRoute using the system property jvmRoute */
         try {
@@ -116,7 +118,7 @@ public class StandardEngine extends ContainerBase implements Engine {
      */
     @Override
     public Realm getRealm() {
-        // 默认根据 server.xml，得到 LockOutRealm 对象
+        // 默认根据 server.xml，得到 UserDatabaseRealm 对象
         Realm configured = super.getRealm();
         // If no set realm has been called - default to NullRealm
         // This can be overridden at engine, context and host level

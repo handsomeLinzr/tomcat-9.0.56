@@ -208,6 +208,7 @@ public abstract class AbstractEndpoint<S,U> {
 
     private ObjectName oname = null;
 
+    // 存放着 serverSocket 接收到的连接请求 socket，key 是 socket，value 是 NioSocketWrapper，也就是 NioChannel 包装，在获取到连接后放入
     /**
      * Map holding all current connections keyed with the sockets.
      */
@@ -499,6 +500,7 @@ public abstract class AbstractEndpoint<S,U> {
     public int getAcceptorThreadPriority() { return acceptorThreadPriority; }
 
 
+    // 最大连接数量
     private int maxConnections = 8*1024;
     public void setMaxConnections(int maxCon) {
         this.maxConnections = maxCon;
@@ -538,6 +540,10 @@ public abstract class AbstractEndpoint<S,U> {
         return -1;
     }
 
+    // 在 start 的时候创建，创建了 worker 线程池
+    // 对应调用的地方是 createExecutor 方法
+    // 核心线程 10，最大线程 200，队列用的 TaskQueue
+    // 对象是自定义 ThreadPoolExecutor
     /**
      * External Executor based thread pool.
      */
@@ -549,6 +555,8 @@ public abstract class AbstractEndpoint<S,U> {
     public Executor getExecutor() { return executor; }
 
 
+    // 默认被设置成了和 service 的公用线程池同一个，那个包装的 utilityExecutorWrapper
+    // 在 connector.init 阶段设置
     /**
      * External Executor based thread pool for utility tasks.
      */
@@ -586,6 +594,7 @@ public abstract class AbstractEndpoint<S,U> {
 
     public int getPortWithOffset() {
         // Zero is a special case and negative values are invalid
+        // 默认 8080
         int port = getPort();
         if (port > 0) {
             return port + getPortOffset();
@@ -651,6 +660,7 @@ public abstract class AbstractEndpoint<S,U> {
     private boolean bindOnInit = true;
     public boolean getBindOnInit() { return bindOnInit; }
     public void setBindOnInit(boolean b) { this.bindOnInit = b; }
+    // 在 init 的时候设置成了 BOUND_ON_INIT
     private volatile BindState bindState = BindState.UNBOUND;
     protected BindState getBindState() {
         return bindState;
@@ -787,6 +797,7 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
+    // keepAlive 的最大请求数量，默认 100
     /**
      * Max keep alive requests
      */
@@ -1152,6 +1163,7 @@ public abstract class AbstractEndpoint<S,U> {
 
     // ---------------------------------------------- Request processing methods
 
+    // 根据给定的 SocketWrapper 和 给的状态，进行处理
     /**
      * Process the given SocketWrapper with the given status. Used to trigger
      * processing as if the Poller (for those endpoints that have one)
@@ -1168,21 +1180,30 @@ public abstract class AbstractEndpoint<S,U> {
             SocketEvent event, boolean dispatch) {
         try {
             if (socketWrapper == null) {
+                // 空的直接返回 false
                 return false;
             }
+
+            // 用了 processorCache 缓存，避免了重复创建和 gc 回收的开销
             SocketProcessorBase<S> sc = null;
             if (processorCache != null) {
+                // 有缓存先拿缓存，用 pop 是为了极致压缩性能，因为这个对象可能当前刚用完又马上拿出去，行缓存的优势，减少内存寻址的时间
                 sc = processorCache.pop();
             }
             if (sc == null) {
+                // 创建一个 SocketProcessor 处理
                 sc = createSocketProcessor(socketWrapper, event);
             } else {
+                // 重置这个 SocketProcessor，绑定为当前的 socket 和 event
                 sc.reset(socketWrapper, event);
             }
+            // 获取当前 endpoint 的 worker 线程池
             Executor executor = getExecutor();
             if (dispatch && executor != null) {
+                // 调用 executor 执行这个 SocketProcessor 任务过程
                 executor.execute(sc);
             } else {
+                // 否则直接当前线程运行
                 sc.run();
             }
         } catch (RejectedExecutionException ree) {
@@ -1218,6 +1239,9 @@ public abstract class AbstractEndpoint<S,U> {
     public abstract void stopInternal() throws Exception;
 
 
+    // 创建 serverSocket
+    // 设置 serverSocket 接收的 socket 的属性配置
+    // 初始化 ssl
     private void bindWithCleanup() throws Exception {
         try {
             bind();
@@ -1234,7 +1258,7 @@ public abstract class AbstractEndpoint<S,U> {
     // 实例化
     public final void init() throws Exception {
         if (bindOnInit) {
-            // 绑定
+            // 创建 serverSocket，绑定 address，设置 socket 属性配置
             bindWithCleanup();
             // 设置绑定状态
             bindState = BindState.BOUND_ON_INIT;
@@ -1307,16 +1331,19 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
+    // 启动 endPoint
     public final void start() throws Exception {
         if (bindState == BindState.UNBOUND) {
             bindWithCleanup();
             bindState = BindState.BOUND_ON_START;
         }
+        // 调用具体的 EndPoint 启动，比如 NioEndpoint
         startInternal();
     }
 
 
     protected void startAcceptorThread() {
+        // 创建接收器
         acceptor = new Acceptor<>(this);
         String threadName = getName() + "-Acceptor";
         acceptor.setThreadName(threadName);

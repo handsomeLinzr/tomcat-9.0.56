@@ -55,6 +55,7 @@ public final class Mapper {
     // ----------------------------------------------------- Instance Variables
 
 
+    // host 的数组
     /**
      * Array containing the virtual hosts definitions.
      */
@@ -94,6 +95,7 @@ public final class Mapper {
     }
 
 
+    // 添加一个 host
     /**
      * Add a new host to the mapper.
      *
@@ -103,10 +105,15 @@ public final class Mapper {
      */
     public synchronized void addHost(String name, String[] aliases,
                                      Host host) {
+        // 重新处理名称
         name = renameWildcardHost(name);
+        // 创建一个 hosts 数量+1 的数组
         MappedHost[] newHosts = new MappedHost[hosts.length + 1];
+        // 构建新的 MappedHost
         MappedHost newHost = new MappedHost(name, host);
+        // 将 hosts 复制给 newHosts，且将 newHost 添加到 newHosts 中
         if (insertMap(hosts, newHosts, newHost)) {
+            // hosts 指向新的 hosts
             hosts = newHosts;
             if (newHost.name.equals(defaultHostName)) {
                 defaultHost = newHost;
@@ -115,6 +122,7 @@ public final class Mapper {
                 log.debug(sm.getString("mapper.addHost.success", name));
             }
         } else {
+            // 如果已经存在，且 host 是同一个
             MappedHost duplicate = hosts[find(hosts, name)];
             if (duplicate.object == host) {
                 // The host is already registered in the mapper.
@@ -124,6 +132,7 @@ public final class Mapper {
                 }
                 newHost = duplicate;
             } else {
+                // 否则报错
                 log.error(sm.getString("mapper.duplicateHost", name,
                         duplicate.getRealHostName()));
                 // Do not add aliases, as removeHost(hostName) won't be able to
@@ -699,6 +708,7 @@ public final class Mapper {
         }
         host.toChars();
         uri.toChars();
+        // 匹配 context
         internalMap(host.getCharChunk(), uri.getCharChunk(), version, mappingData);
     }
 
@@ -781,6 +791,7 @@ public final class Mapper {
         // Context mapping
         ContextList contextList = mappedHost.contextList;
         MappedContext[] contexts = contextList.contexts;
+        // 根据uri匹配
         int pos = find(contexts, uri);
         if (pos == -1) {
             return;
@@ -1520,12 +1531,17 @@ public final class Mapper {
      */
     private static final <T> boolean insertMap
         (MapElement<T>[] oldMap, MapElement<T>[] newMap, MapElement<T> newElement) {
+        // 获取 newElement 的位置
         int pos = find(oldMap, newElement.name);
         if ((pos != -1) && (newElement.name.equals(oldMap[pos].name))) {
+            // 如果已经存在，直接返回 false
             return false;
         }
+        // 复制数组 0 到 post
         System.arraycopy(oldMap, 0, newMap, 0, pos + 1);
+        // 将新的 host 放到 pos 后
         newMap[pos + 1] = newElement;
+        // 复制数组 post+1 到结束
         System.arraycopy
             (oldMap, pos + 1, newMap, pos + 2, oldMap.length - pos - 1);
         return true;

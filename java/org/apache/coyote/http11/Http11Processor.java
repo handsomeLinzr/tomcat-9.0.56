@@ -204,6 +204,7 @@ public class Http11Processor extends AbstractProcessor {
     }
 
 
+    // 添加过滤器
     /**
      * Add an input filter to the current request. If the encoding is not
      * supported, a 501 response will be returned to the client.
@@ -248,10 +249,11 @@ public class Http11Processor extends AbstractProcessor {
     @Override
     public SocketState service(SocketWrapperBase<?> socketWrapper)
         throws IOException {
+        // 获取请求信息
         RequestInfo rp = request.getRequestProcessor();
         rp.setStage(org.apache.coyote.Constants.STAGE_PARSE);
 
-        // Setting up the I/O
+        // 当前 Processor 开始接管这次 socket 事件。
         setSocketWrapper(socketWrapper);
 
         // Flags
@@ -261,10 +263,12 @@ public class Http11Processor extends AbstractProcessor {
         boolean keptAlive = false;
         SendfileState sendfileState = SendfileState.DONE;
 
+        // HTTP/1.1 keep-alive 主循环。
+        // 条件都满足时，同一个连接会持续解析多次请求。
         while (!getErrorState().isError() && keepAlive && !isAsync() && upgradeToken == null &&
                 sendfileState == SendfileState.DONE && !protocol.isPaused()) {
 
-            // Parsing the request header
+            // 第一步：解析请求行和请求头。
             try {
                 if (!inputBuffer.parseRequestLine(keptAlive, protocol.getConnectionTimeout(),
                         protocol.getKeepAliveTimeout())) {
@@ -275,18 +279,17 @@ public class Http11Processor extends AbstractProcessor {
                     }
                 }
 
-                // Process the Protocol component of the request line
-                // Need to know if this is an HTTP 0.9 request before trying to
-                // parse headers.
+                // 根据请求行里的协议版本，决定后续头解析策略。
                 prepareRequestProtocol();
 
                 if (protocol.isPaused()) {
+                    // 503 错误，服务异常
                     // 503 - Service unavailable
                     response.setStatus(503);
                     setErrorState(ErrorState.CLOSE_CLEAN, null);
                 } else {
                     keptAlive = true;
-                    // Set this every time in case limit has been changed via JMX
+                    // Header 限制可能运行期通过 JMX 改掉，所以每次请求都重新设置。
                     request.getMimeHeaders().setLimit(protocol.getMaxHeaderCount());
                     // Don't parse headers for HTTP/0.9
                     if (!http09 && !inputBuffer.parseHeaders()) {
@@ -327,7 +330,7 @@ public class Http11Processor extends AbstractProcessor {
                 setErrorState(ErrorState.CLOSE_CLEAN, t);
             }
 
-            // Has an upgrade been requested?
+            // 第二步：检查是否要求协议升级，例如 WebSocket。
             if (isConnectionToken(request.getMimeHeaders(), "upgrade")) {
                 // Check the protocol
                 String requestedProtocol = request.getHeader("Upgrade");
@@ -352,9 +355,10 @@ public class Http11Processor extends AbstractProcessor {
             }
 
             if (getErrorState().isIoAllowed()) {
-                // Setting up filters, and parse some request headers
+                // 第三步：根据请求头准备输入/输出过滤器。
                 rp.setStage(org.apache.coyote.Constants.STAGE_PREPARE);
                 try {
+                    // 预处理请求，准备输入/输出过滤器
                     prepareRequest();
                 } catch (Throwable t) {
                     ExceptionUtils.handleThrowable(t);
@@ -375,10 +379,11 @@ public class Http11Processor extends AbstractProcessor {
                 keepAlive = false;
             }
 
-            // Process the request in the adapter
+            // 第四步：把协议层请求交给 Adapter，正式进入 Catalina 容器。
             if (getErrorState().isIoAllowed()) {
                 try {
                     rp.setStage(org.apache.coyote.Constants.STAGE_SERVICE);
+                    // 调用 CoyoteAdapter.service，开始进入容器
                     getAdapter().service(request, response);
                     // Handle when the response was committed before a serious
                     // error occurred.  Throwing a ServletException should both
@@ -413,7 +418,7 @@ public class Http11Processor extends AbstractProcessor {
                 }
             }
 
-            // Finish the handling of the request
+            // 第五步：收尾，决定连接复用、升级还是关闭。
             rp.setStage(org.apache.coyote.Constants.STAGE_ENDINPUT);
             if (!isAsync()) {
                 // If this is an async request then the request ends when it has
@@ -479,7 +484,9 @@ public class Http11Processor extends AbstractProcessor {
 
     @Override
     protected final void setSocketWrapper(SocketWrapperBase<?> socketWrapper) {
+        // 设置当前关联socket
         super.setSocketWrapper(socketWrapper);
+        // 初始化输入输出缓存
         inputBuffer.init(socketWrapper);
         outputBuffer.init(socketWrapper);
     }
@@ -757,6 +764,7 @@ public class Http11Processor extends AbstractProcessor {
             }
         }
 
+        // 所以的过滤器
         // Input filter setup
         InputFilter[] inputFilters = inputBuffer.getFilters();
 
@@ -767,6 +775,7 @@ public class Http11Processor extends AbstractProcessor {
             MessageBytes transferEncodingValueMB = headers.getValue("transfer-encoding");
             if (transferEncodingValueMB != null) {
                 List<String> encodingNames = new ArrayList<>();
+                // 编码过滤器
                 if (TokenList.parseTokenList(headers.values("transfer-encoding"), encodingNames)) {
                     for (String encodingName : encodingNames) {
                         addInputFilter(inputFilters, encodingName);
@@ -803,6 +812,7 @@ public class Http11Processor extends AbstractProcessor {
             }
         }
 
+        // 解析 host 和 端口
         // Validate host name and extract port if present
         parseHost(hostValueMB);
 
@@ -1072,6 +1082,7 @@ public class Http11Processor extends AbstractProcessor {
     protected void populatePort() {
         // Ensure the local port field is populated before using it.
         request.action(ActionCode.REQ_LOCALPORT_ATTRIBUTE, request);
+        // request 端口设置
         request.setServerPort(request.getLocalPort());
     }
 

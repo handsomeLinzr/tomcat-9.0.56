@@ -171,6 +171,7 @@ public class ApplicationContext implements ServletContext {
     private final ServletContext facade = new ApplicationContextFacade(this);
 
 
+    // initParameters 启动参数
     /**
      * The merged context initialization parameters for this Context.
      */
@@ -189,6 +190,7 @@ public class ApplicationContext implements ServletContext {
     private final ThreadLocal<DispatchData> dispatchData = new ThreadLocal<>();
 
 
+    // ApplicationSessionCookieConfig
     /**
      * Session Cookie config
      */

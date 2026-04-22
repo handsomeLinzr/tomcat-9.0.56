@@ -164,6 +164,7 @@ public class StandardManager extends ManagerBase {
     }
 
 
+    // 加载 session
     /**
      * Load any currently active sessions that were previously unloaded
      * to the appropriate persistence mechanism, if any.  If persistence is not
@@ -178,6 +179,7 @@ public class StandardManager extends ManagerBase {
             log.debug("Start: Loading persisted sessions");
         }
 
+        // 清空 session
         // Initialize our internal data structures
         sessions.clear();
 

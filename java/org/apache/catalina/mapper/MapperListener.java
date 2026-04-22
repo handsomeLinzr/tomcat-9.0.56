@@ -53,7 +53,7 @@ public class MapperListener extends LifecycleMBeanBase
 
 
     // ----------------------------------------------------- Instance Variables
-    // Mapper
+    // service.mapper，得到的是 Mapper
     /**
      * Associated mapper.
      */
@@ -115,6 +115,7 @@ public class MapperListener extends LifecycleMBeanBase
         for (Container conHost : conHosts) {
             Host host = (Host) conHost;
             if (!LifecycleState.NEW.equals(host.getState())) {
+                // 注册 host/context/wrapper
                 // Registering the host will register the context and wrappers
                 registerHost(host);
             }
@@ -152,6 +153,7 @@ public class MapperListener extends LifecycleMBeanBase
 
     // --------------------------------------------- Container Listener methods
 
+    // 所有容器事件都会走到这里
     @Override
     public void containerEvent(ContainerEvent event) {
 
@@ -305,11 +307,13 @@ public class MapperListener extends LifecycleMBeanBase
      */
     private void registerHost(Host host) {
 
+        // 将 host 添加到 mapper 中
         String[] aliases = host.findAliases();
         mapper.addHost(host.getName(), aliases, host);
 
         for (Container container : host.findChildren()) {
             if (container.getState().isAvailable()) {
+                // 注册 context
                 registerContext((Context) container);
             }
         }
@@ -376,17 +380,22 @@ public class MapperListener extends LifecycleMBeanBase
      */
     private void registerContext(Context context) {
 
+        // 获取 context 的路径
         String contextPath = context.getPath();
         if ("/".equals(contextPath)) {
             contextPath = "";
         }
+        // 获取上层的 host
         Host host = (Host)context.getParent();
 
+        // 默认 StandardRoot
         WebResourceRoot resources = context.getResources();
+        // 首页
         String[] welcomeFiles = context.findWelcomeFiles();
         List<WrapperMappingInfo> wrappers = new ArrayList<>();
 
         for (Container container : context.findChildren()) {
+            // 准备 wrapper 的映射信息
             prepareWrapperMappingInfo(context, (Wrapper) container, wrappers);
 
             if(log.isDebugEnabled()) {
@@ -395,6 +404,7 @@ public class MapperListener extends LifecycleMBeanBase
             }
         }
 
+        // 添加对应的 wrapper
         mapper.addContextVersion(host.getName(), host, contextPath,
                 context.getWebappVersion(), context, welcomeFiles, resources,
                 wrappers);
@@ -466,12 +476,15 @@ public class MapperListener extends LifecycleMBeanBase
      */
     private void prepareWrapperMappingInfo(Context context, Wrapper wrapper,
             List<WrapperMappingInfo> wrappers) {
+        // 获取 wrapper 名称
         String wrapperName = wrapper.getName();
         boolean resourceOnly = context.isResourceOnlyServlet(wrapperName);
+        // 获取 wrapper 本身的 mappings
         String[] mappings = wrapper.findMappings();
         for (String mapping : mappings) {
             boolean jspWildCard = (wrapperName.equals("jsp")
                                    && mapping.endsWith("/*"));
+            // wrappers 中添加 WrapperMappingInfo 映射信息
             wrappers.add(new WrapperMappingInfo(mapping, wrapper, jspWildCard,
                     resourceOnly));
         }

@@ -44,6 +44,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.tomcat.util.res.StringManager;
 
+// tomcat 自定义写的任务线程池
 /**
  * An {@link java.util.concurrent.ExecutorService}
  * that executes each submitted task using
@@ -649,13 +650,16 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          */
         Worker(Runnable firstTask) {
             setState(-1); // inhibit interrupts until runWorker
+            // 设置首任务
             this.firstTask = firstTask;
+            // 创建新线程，任务是当前 this，也就是这个 worker
             this.thread = getThreadFactory().newThread(this);
         }
 
         /** Delegates main run loop to outer runWorker. */
         @Override
         public void run() {
+            // 执行 worker
             runWorker(this);
         }
 
@@ -1179,6 +1183,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     @SuppressWarnings("null")  // task cannot be null
     final void runWorker(Worker w) {
         Thread wt = Thread.currentThread();
+        // 获取任务
         Runnable task = w.firstTask;
         w.firstTask = null;
         w.unlock(); // allow interrupts
@@ -1199,7 +1204,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                 try {
                     beforeExecute(wt, task);
                     try {
+                        // 执行任务的 run 方法
                         task.run();
+                        // 后置处理，对当前的运行中的任务数自减
                         afterExecute(task, null);
                     } catch (Throwable ex) {
                         afterExecute(task, ex);
@@ -1289,6 +1296,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                               BlockingQueue<Runnable> workQueue,
                               ThreadFactory threadFactory) {
         this(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue,
+             // 默认拒绝策略是直接抛出拒绝异常 RejectedExecutionException
              threadFactory, defaultHandler);
     }
 
@@ -1406,8 +1414,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      */
     @Deprecated
     public void execute(Runnable command, long timeout, TimeUnit unit) {
+        // 提交数量+1，统计用
         submittedCount.incrementAndGet();
         try {
+            // 执行任务
             executeInternal(command);
         } catch (RejectedExecutionException rx) {
             if (getQueue() instanceof TaskQueue) {
@@ -1433,6 +1443,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
 
+    // 这个其实就是复制了 juc 的线程池执行
     /**
      * Executes the given task sometime in the future.  The task
      * may execute in a new thread or in an existing pooled thread.
@@ -1472,21 +1483,26 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          * and so reject the task.
          */
         int c = ctl.get();
+        // 如果当前的worker线程数小于核心线程数，则直接新增一个worker线程
         if (workerCountOf(c) < corePoolSize) {
             if (addWorker(command, true)) {
                 return;
             }
             c = ctl.get();
         }
+        // 如果已经达到了核心线程数，则直接放到队列
         if (isRunning(c) && workQueue.offer(command)) {
             int recheck = ctl.get();
             if (! isRunning(recheck) && remove(command)) {
                 reject(command);
             } else if (workerCountOf(recheck) == 0) {
+                // 没有运行中的线程，则启动一个
                 addWorker(null, false);
             }
         }
+        // 如果队列满了，则尝试创建一个非核心线程处理
         else if (!addWorker(command, false)) {
+            // 如果失败，拒绝策略
             reject(command);
         }
     }
@@ -2200,10 +2216,13 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         // implementations of the parent class. This test ensures that
         // decrementAndGet() is only called once after each task execution.
         if (!(t instanceof StopPooledThreadException)) {
+            // 如果线程不是属于 StopPooledThreadException，比如 worker 线程就不是
+            // 则对当前的运行的任务进行自减操作
             submittedCount.decrementAndGet();
         }
 
         if (t == null) {
+            // 没有异常，则进行停止检测
             stopCurrentThreadIfNeeded();
         }
     }

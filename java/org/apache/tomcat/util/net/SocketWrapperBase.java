@@ -46,6 +46,7 @@ public abstract class SocketWrapperBase<E> {
 
     protected final AtomicBoolean closed = new AtomicBoolean(false);
 
+    // 默认设置成了 60 秒
     // Volatile because I/O and setting the timeout values occurs on a different
     // thread to the thread checking the timeout.
     private volatile long readTimeout = -1;
@@ -53,6 +54,7 @@ public abstract class SocketWrapperBase<E> {
 
     protected volatile IOException previousIOException = null;
 
+    // 默认 100
     private volatile int keepAliveLeft = 100;
     private volatile boolean upgraded = false;
     private boolean secure = false;
@@ -105,6 +107,7 @@ public abstract class SocketWrapperBase<E> {
     protected final Semaphore writePending;
     protected volatile OperationState<?> writeOperation = null;
 
+    // 当前关联的 Http11Processor 对象
     /**
      * The org.apache.coyote.Processor instance currently associated
      * with the wrapper.
@@ -409,8 +412,10 @@ public abstract class SocketWrapperBase<E> {
      * Close the socket wrapper.
      */
     public void close() {
+        // cas 设置 closed，关闭状态
         if (closed.compareAndSet(false, true)) {
             try {
+                // 成功则释放自己资源
                 getEndpoint().getHandler().release(this);
             } catch (Throwable e) {
                 ExceptionUtils.handleThrowable(e);
@@ -1034,6 +1039,7 @@ public abstract class SocketWrapperBase<E> {
          */
         protected abstract boolean isInline();
 
+        // 用 connector 线程池处理操作
         /**
          * Process the operation using the connector executor.
          * @return true if the operation was accepted, false if the executor
@@ -1041,6 +1047,7 @@ public abstract class SocketWrapperBase<E> {
          */
         protected boolean process() {
             try {
+                // 调用 endpoint 的 线程池处理当前事件
                 getEndpoint().getExecutor().execute(this);
                 return true;
             } catch (RejectedExecutionException ree) {

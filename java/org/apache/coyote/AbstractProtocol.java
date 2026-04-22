@@ -101,7 +101,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         this.endpoint = endpoint;
         // -1
         setConnectionLinger(Constants.DEFAULT_CONNECTION_LINGER);
-        // true
+        // true,
         setTcpNoDelay(Constants.DEFAULT_TCP_NO_DELAY);
     }
 
@@ -228,6 +228,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
     }
 
 
+    // 对应的 endpoint 监听节点的公用线程池
     @Override
     public ScheduledExecutorService getUtilityExecutor() { return endpoint.getUtilityExecutor(); }
     @Override
@@ -380,12 +381,15 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
 
     private String getNameInternal() {
+        // http-nio
         StringBuilder name = new StringBuilder(getNamePrefix());
+        // 拼接 -
         name.append('-');
         String id = getId();
         if (id != null) {
             name.append(id);
         } else {
+            // 地址
             if (getAddress() != null) {
                 name.append(getAddress().getHostAddress());
                 name.append('-');
@@ -582,13 +586,15 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
     @Override
     public void init() throws Exception {
+        // 日志
         if (getLog().isInfoEnabled()) {
             getLog().info(sm.getString("abstractProtocolHandler.init", getName()));
             logPortOffset();
         }
 
         if (oname == null) {
-            // Component not pre-registered so register it
+            // 协议处理器本身也会注册到 JMX，便于运行期观察和运维操作。
+            // 创建名称
             oname = createObjectName();
             if (oname != null) {
                 Registry.getRegistry(null, null).registerComponent(this, oname, null);
@@ -602,12 +608,14 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                     getHandler().getGlobal(), rgOname, null);
         }
 
-        // 端点名称，
+        // endpoint 是底层网络端点，真正负责 accept / poll / worker。
+        // ProtocolHandler 更像调度层，负责把网络事件组织成 HTTP 语义。
+        // 端点名称
         String endpointName = getName();
         endpoint.setName(endpointName.substring(1, endpointName.length()-1));
         endpoint.setDomain(domain);
 
-        // 调用端点进行初始化
+        // 初始化网络端点，例如 selector、server socket 等底层资源。
         endpoint.init();
     }
 
@@ -619,7 +627,9 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
             logPortOffset();
         }
 
+        // 真正开始监听端口并接收连接。
         endpoint.start();
+        // 定时检查 async 请求超时。注意这不是 socket 读超时，而是 Servlet async 超时。
         monitorFuture = getUtilityExecutor().scheduleWithFixedDelay(
                 () -> {
                     if (!isPaused()) {
@@ -667,6 +677,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
             getLog().info(sm.getString("abstractProtocolHandler.pause", getName()));
         }
 
+        // pause 表示不再接新连接，但不会立刻销毁整个 endpoint。
         stopAsyncTimeout();
         endpoint.pause();
     }
@@ -700,7 +711,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
             monitorFuture = null;
         }
         stopAsyncTimeout();
-        // Timeout any waiting processor
+        // 停机时需要把正在 async waiting 的 processor 唤醒，避免挂死。
         for (Processor processor : waitingProcessors) {
             processor.timeoutAsync(-1);
         }
@@ -796,6 +807,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         }
 
 
+        // 链接处理过程
         @SuppressWarnings("deprecation")
         @Override
         public SocketState process(SocketWrapperBase<S> wrapper, SocketEvent status) {
@@ -808,6 +820,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 return SocketState.CLOSED;
             }
 
+            // 获取连接的客户端socket
             S socket = wrapper.getSocket();
 
             Processor processor = (Processor) wrapper.getCurrentProcessor();
@@ -829,6 +842,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
             }
 
             if (processor != null) {
+                // 确保超时机制不会触发
                 // Make sure an async timeout doesn't fire
                 getProtocol().removeWaitingProcessor(processor);
             } else if (status == SocketEvent.DISCONNECT || status == SocketEvent.ERROR) {
@@ -879,13 +893,17 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                     }
                 }
                 if (processor == null) {
+                    // 从缓存中获取 processor
                     processor = recycledProcessors.pop();
                     if (getLog().isDebugEnabled()) {
                         getLog().debug(sm.getString("abstractConnectionHandler.processorPop", processor));
                     }
                 }
                 if (processor == null) {
+                    // 如果没有
+                    // 创建一个 Http11Processor
                     processor = getProtocol().createProcessor();
+                    // 注册
                     register(processor);
                     if (getLog().isDebugEnabled()) {
                         getLog().debug(sm.getString("abstractConnectionHandler.processorCreate", processor));
@@ -896,11 +914,13 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 processor.setSslSupport(
                         wrapper.getSslSupport(getProtocol().getClientCertProvider()));
 
+                // 将处理器和连接相互关联
                 // Associate the processor with the connection
                 wrapper.setCurrentProcessor(processor);
 
                 SocketState state = SocketState.CLOSED;
                 do {
+                    // 处理socket事件
                     state = processor.process(wrapper, status);
 
                     if (state == SocketState.UPGRADING) {

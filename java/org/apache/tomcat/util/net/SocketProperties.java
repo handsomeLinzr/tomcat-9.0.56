@@ -54,6 +54,7 @@ public class SocketProperties {
      */
     protected int eventCache = 500;
 
+    // 堆外内存，默认 false
     /**
      * Enable/disable direct buffers for the network buffers
      * Default value is disabled
@@ -66,24 +67,28 @@ public class SocketProperties {
      */
     protected boolean directSslBuffer = false;
 
+    // socket 接收的缓冲区大小
     /**
      * Socket receive buffer size in bytes (SO_RCVBUF).
      * JVM default used if not set.
      */
     protected Integer rxBufSize = null;
 
+    // 发送缓存
     /**
      * Socket send buffer size in bytes (SO_SNDBUF).
      * JVM default used if not set.
      */
     protected Integer txBufSize = null;
 
+    // 8kb
     /**
      * The application read buffer size in bytes.
      * Default value is rxBufSize
      */
     protected int appReadBufSize = 8192;
 
+    // 8kb
     /**
      * The application write buffer size in bytes
      * Default value is txBufSize
@@ -103,6 +108,7 @@ public class SocketProperties {
      */
     protected int bufferPool = 500;
 
+    // 100m  缓存池
     /**
      * Buffer pool size in bytes to be cached
      * -1 means unlimited, 0 means no cache
@@ -117,6 +123,7 @@ public class SocketProperties {
      */
     protected int bufferPoolSize = 1024*1024*100;
 
+    // TCP_NO_DELAY 选项，默认 true
     /**
      * TCP_NO_DELAY option. JVM default used if not set.
      */
@@ -236,10 +243,12 @@ public class SocketProperties {
 
     public void setProperties(ServerSocket socket) throws SocketException{
         if (rxBufSize != null) {
+            // 如果设置了 socket 的接收缓冲区大小，则设置给 socket
             socket.setReceiveBufferSize(rxBufSize.intValue());
         }
         if (performanceConnectionTime != null && performanceLatency != null &&
                 performanceBandwidth != null) {
+            // 继续设置连接得相关属性
             socket.setPerformancePreferences(
                     performanceConnectionTime.intValue(),
                     performanceLatency.intValue(),
@@ -249,6 +258,7 @@ public class SocketProperties {
             socket.setReuseAddress(soReuseAddress.booleanValue());
         }
         if (soTimeout != null && soTimeout.intValue() >= 0) {
+            // 60 秒
             socket.setSoTimeout(soTimeout.intValue());
         }
     }

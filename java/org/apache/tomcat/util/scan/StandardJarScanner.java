@@ -177,10 +177,12 @@ public class StandardJarScanner implements JarScanner {
 
         Set<URL> processedURLs = new HashSet<>();
 
+        // 扫描 WEB-INF/lib
         // Scan WEB-INF/lib
         Set<String> dirList = context.getResourcePaths(Constants.WEB_INF_LIB);
         if (dirList != null) {
             for (String path : dirList) {
+                // jar 包
                 if (path.endsWith(Constants.JAR_EXT) &&
                         getJarScanFilter().check(scanType,
                                 path.substring(path.lastIndexOf('/')+1))) {
@@ -192,6 +194,7 @@ public class StandardJarScanner implements JarScanner {
                     try {
                         url = context.getResource(path);
                         processedURLs.add(url);
+                        // 处理过程
                         process(scanType, callback, url, path, true, null);
                     } catch (IOException e) {
                         log.warn(sm.getString("jarScan.webinflibFail", url), e);
@@ -384,6 +387,7 @@ public class StandardJarScanner implements JarScanner {
                 if (isScanManifest()) {
                     processManifest(jar, isWebapp, classPathUrlsToProcess);
                 }
+                // 扫描
                 callback.scan(jar, webappPath, isWebapp);
             }
         } else if ("file".equals(url.getProtocol())) {

@@ -266,6 +266,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
 
     // ----------------------------------------------------- Instance Variables
 
+    // 默认是 StandardRoot
     /**
      * Associated web resources for this webapp.
      */
@@ -413,6 +414,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
     private boolean hasExternalRepositories = false;
 
 
+    // 收集 /WEB-INF/classes + /WEB-INF/lib 的所有类
     /**
      * Repositories managed by this class rather than the super class.
      */
@@ -1553,6 +1555,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
     }
 
 
+    // 启动类加载器
     /**
      * Start the class loader.
      *
@@ -1563,12 +1566,15 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
 
         state = LifecycleState.STARTING_PREP;
 
+        // /WEB-INF/classes 路径下的资源
+        // 全部加到 localRepositories 中
         WebResource[] classesResources = resources.getResources("/WEB-INF/classes");
         for (WebResource classes : classesResources) {
             if (classes.isDirectory() && classes.canRead()) {
                 localRepositories.add(classes.getURL());
             }
         }
+        // /WEB-INF/lib 下的资源，也就是 jar，全部加到 localRepositories 中
         WebResource[] jars = resources.listResources("/WEB-INF/lib");
         for (WebResource jar : jars) {
             if (jar.getName().endsWith(".jar") && jar.isFile() && jar.canRead()) {

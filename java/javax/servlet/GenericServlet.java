@@ -155,6 +155,7 @@ public abstract class GenericServlet implements Servlet, ServletConfig,
     @Override
     public void init(ServletConfig config) throws ServletException {
         this.config = config;
+        // 调用子类 init 方法，子类实现
         this.init();
     }
 

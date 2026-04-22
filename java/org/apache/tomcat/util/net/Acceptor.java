@@ -65,6 +65,7 @@ public class Acceptor<U> implements Runnable {
     }
 
 
+    // 接收请求
     @Override
     public void run() {
 
@@ -72,6 +73,7 @@ public class Acceptor<U> implements Runnable {
         long pauseStart = 0;
 
         try {
+            // 一直循环，直到接收到停止指令
             // Loop until we receive a shutdown command
             while (!stopCalled) {
 
@@ -113,6 +115,7 @@ public class Acceptor<U> implements Runnable {
                 state = AcceptorState.RUNNING;
 
                 try {
+                    // 如果已经达到最大连接数，则等待
                     //if we have reached max connections, wait
                     endpoint.countUpOrAwaitConnection();
 
@@ -124,8 +127,9 @@ public class Acceptor<U> implements Runnable {
 
                     U socket = null;
                     try {
+                        // 阻塞等待 endpoint 的连接请求，返回连接通道
                         // Accept the next incoming connection from the server
-                        // socket
+                        // socket 就是接收到的连接请求
                         socket = endpoint.serverSocketAccept();
                     } catch (Exception ioe) {
                         // We didn't get a socket
@@ -139,6 +143,7 @@ public class Acceptor<U> implements Runnable {
                             break;
                         }
                     }
+                    // 成功接收，重置 errorDelay
                     // Successful accept, reset the error delay
                     errorDelay = 0;
 
@@ -146,7 +151,10 @@ public class Acceptor<U> implements Runnable {
                     if (!stopCalled && !endpoint.isPaused()) {
                         // setSocketOptions() will hand the socket off to
                         // an appropriate processor if successful
+                        // 调用 endpoint.setSocketOptions(socket) 处理该请求通道，重点，处理连接，
+                        // 封装并添加到 poller.events 中，由 poller 线程来处理
                         if (!endpoint.setSocketOptions(socket)) {
+                            // 如果请求处理后返回 false，则关闭这个通道
                             endpoint.closeSocket(socket);
                         }
                     } else {

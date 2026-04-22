@@ -78,6 +78,7 @@ public final class Request {
 
     // ----------------------------------------------------- Instance Variables
 
+    // 设置成 request.localPort
     private int serverPort = -1;
     private final MessageBytes serverNameMB = MessageBytes.newInstance();
 

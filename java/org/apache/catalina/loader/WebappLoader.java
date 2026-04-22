@@ -96,6 +96,7 @@ public class WebappLoader extends LifecycleMBeanBase
 
     // ----------------------------------------------------- Instance Variables
 
+    // ParallelWebappClassLoader
     /**
      * The class loader being managed by this Loader component.
      */
@@ -383,6 +384,7 @@ public class WebappLoader extends LifecycleMBeanBase
     }
 
 
+    // 启动 webappLoader
     /**
      * Start associated {@link ClassLoader} and implement the requirements
      * of {@link org.apache.catalina.util.LifecycleBase#startInternal()}.
@@ -393,10 +395,12 @@ public class WebappLoader extends LifecycleMBeanBase
     @Override
     protected void startInternal() throws LifecycleException {
 
+        // 日志
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("webappLoader.starting"));
         }
 
+        // 默认 StandardRoot
         if (context.getResources() == null) {
             log.info(sm.getString("webappLoader.noResources", context));
             setState(LifecycleState.STARTING);
@@ -406,15 +410,19 @@ public class WebappLoader extends LifecycleMBeanBase
         // Construct a class loader based on our current repositories list
         try {
 
+            // 创建一个新的 classLoader
             classLoader = createClassLoader();
+            // 设置对应的 resource，默认是 StandardRoot
             classLoader.setResources(context.getResources());
             classLoader.setDelegate(this.delegate);
 
+            // 配置仓库，classpath
             // Configure our repositories
             setClassPath();
 
             setPermissions();
 
+            // 启动类加载器，解析并收集 /WEB-INF/classes + /WEB-INF/lib 的所有类和 jar 到里边
             classLoader.start();
 
             String contextName = context.getName();
@@ -536,14 +544,17 @@ public class WebappLoader extends LifecycleMBeanBase
             return new ParallelWebappClassLoader(parentClassLoader);
         }
 
+        // ParallelWebappClassLoader
         Class<?> clazz = Class.forName(loaderClass);
         WebappClassLoaderBase classLoader = null;
 
         Class<?>[] argTypes = { ClassLoader.class };
         Object[] args = { parentClassLoader };
+        // 实例化
         Constructor<?> constr = clazz.getConstructor(argTypes);
         classLoader = (WebappClassLoaderBase) constr.newInstance(args);
 
+        // 返回
         return classLoader;
     }
 
@@ -595,6 +606,7 @@ public class WebappLoader extends LifecycleMBeanBase
         if (context == null) {
             return;
         }
+        // ApplicationContext
         ServletContext servletContext = context.getServletContext();
         if (servletContext == null) {
             return;

@@ -41,20 +41,26 @@ public class SocketBufferHandler {
     };
 
     private volatile boolean readBufferConfiguredForWrite = true;
+    // 默认 8192，读缓存，构造函数创建，默认堆内内存
     private volatile ByteBuffer readBuffer;
 
     private volatile boolean writeBufferConfiguredForWrite = true;
+    // 默认 8192，写缓存，构造函数设置，默认堆内内存
     private volatile ByteBuffer writeBuffer;
 
+    // 默认 false，构造函数设置
     private final boolean direct;
 
     public SocketBufferHandler(int readBufferSize, int writeBufferSize,
             boolean direct) {
+        // 默认 false
         this.direct = direct;
         if (direct) {
+            // 如果是直接内存，直接申请直接内存，默认都是 8192
             readBuffer = ByteBuffer.allocateDirect(readBufferSize);
             writeBuffer = ByteBuffer.allocateDirect(writeBufferSize);
         } else {
+            // 否则申请堆内内存
             readBuffer = ByteBuffer.allocate(readBufferSize);
             writeBuffer = ByteBuffer.allocate(writeBufferSize);
         }

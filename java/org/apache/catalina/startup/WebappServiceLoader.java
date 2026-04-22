@@ -193,6 +193,7 @@ public class WebappServiceLoader<T> {
         if (containerServiceClassNames.isEmpty()) {
             return Collections.emptyList();
         }
+        // 加载类
         // Load the discovered services
         return loadServices(serviceType, containerServiceClassNames);
     }

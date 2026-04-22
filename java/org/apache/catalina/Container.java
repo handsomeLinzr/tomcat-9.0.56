@@ -297,6 +297,7 @@ public interface Container extends Lifecycle {
     public void setRealm(Realm realm);
 
 
+    // 获取配置资源所咱的位置
     /**
      * Find the configuration path where a configuration resource
      * is located.
@@ -308,6 +309,7 @@ public interface Container extends Lifecycle {
         StringBuilder result = new StringBuilder();
         Container host = null;
         Container engine = null;
+        // 获取顶级容器，得到 host 和 engine
         while (container != null) {
             if (container instanceof Host) {
                 host = container;
@@ -332,6 +334,7 @@ public interface Container extends Lifecycle {
     }
 
 
+    // 获取容器对应的 service
     /**
      * Return the Service to which this container belongs.
      * @param container The container to start from

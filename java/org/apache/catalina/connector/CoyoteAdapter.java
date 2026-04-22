@@ -55,8 +55,13 @@ import org.apache.tomcat.util.res.StringManager;
 
 
 /**
- * Implementation of a request processor which delegates the processing to a
- * Coyote processor.
+ * Coyote 和 Catalina 之间的桥接器。
+ *
+ * 可以把请求主线分成两段来看：
+ * 1. Coyote 负责 socket / HTTP 协议解析
+ * 2. Catalina 负责 Mapper / Valve / Filter / Servlet
+ *
+ * 这个类的职责就是把两段接起来，所以是请求主线里最值得精读的入口之一。
  *
  * @author Craig R. McClanahan
  * @author Remy Maucherat
@@ -316,25 +321,27 @@ public class CoyoteAdapter implements Adapter {
     public void service(org.apache.coyote.Request req, org.apache.coyote.Response res)
             throws Exception {
 
+        // 先尝试从 coyote request/response 的 note 中取出已经绑定好的
+        // catalina request/response。连接复用场景下，这对对象通常会被反复回收再使用。
         Request request = (Request) req.getNote(ADAPTER_NOTES);
         Response response = (Response) res.getNote(ADAPTER_NOTES);
 
         if (request == null) {
-            // Create objects
+            // 第一次进入时，创建 Catalina 层的 Request/Response 包装对象。
             request = connector.createRequest();
             request.setCoyoteRequest(req);
             response = connector.createResponse();
             response.setCoyoteResponse(res);
 
-            // Link objects
+            // 双向关联，后续容器和 Servlet 基本都围绕这对对象展开。
             request.setResponse(response);
             response.setRequest(request);
 
-            // Set as notes
+            // 挂回 coyote note，方便后续复用。
             req.setNote(ADAPTER_NOTES, request);
             res.setNote(ADAPTER_NOTES, response);
 
-            // Set query string encoding
+            // 查询参数的解码字符集来自 Connector 配置。
             req.getParameters().setQueryStringCharset(connector.getURICharset());
         }
 
@@ -348,14 +355,15 @@ public class CoyoteAdapter implements Adapter {
         req.getRequestProcessor().setWorkerThreadName(THREAD_NAME.get());
 
         try {
-            // Parse and set Catalina and configuration specific
-            // request parameters
+            // 进入容器前的总预处理：
+            // scheme/secure、URI 解码、规范化、Mapper 映射、session id 解析都在这里完成。
             postParseSuccess = postParseRequest(req, request, res, response);
             if (postParseSuccess) {
-                //check valves if we support async
+                // 先根据容器链路判断本次请求是否支持 async。
                 request.setAsyncSupported(
                         connector.getService().getContainer().getPipeline().isAsyncSupported());
-                // Calling the container
+                // 从 Engine pipeline 入口正式进入 Catalina。
+                // 默认 StandardEngineValve
                 connector.getService().getContainer().getPipeline().getFirst().invoke(
                         request, response);
             }
@@ -386,6 +394,7 @@ public class CoyoteAdapter implements Adapter {
                     request.getAsyncContextInternal().setErrorState(throwable, true);
                 }
             } else {
+                // 同步请求在这里做完收尾。
                 request.finishRequest();
                 response.finishResponse();
             }
@@ -404,7 +413,7 @@ public class CoyoteAdapter implements Adapter {
                 async = false;
             }
 
-            // Access log
+            // 只有真正进入过容器链路，才在这里补记 access log。
             if (!async && postParseSuccess) {
                 // Log only if processing was invoked.
                 // If postParseRequest() failed, it has already logged it.
@@ -433,7 +442,7 @@ public class CoyoteAdapter implements Adapter {
 
             req.getRequestProcessor().setWorkerThreadName(null);
 
-            // Recycle the wrapper request and response
+            // 非异步请求可以直接回收对象，供 keep-alive 下一个请求继续复用。
             if (!async) {
                 updateWrapperErrorCount(request, response);
                 request.recycle();
@@ -562,6 +571,7 @@ public class CoyoteAdapter implements Adapter {
 
     // ------------------------------------------------------ Protected Methods
 
+    // 解析完 http 协议头后，需要继续进行后续处理，以便 req/resp 继续处理
     /**
      * Perform the necessary processing after the HTTP headers have been parsed
      * to enable the request/response pair to be passed to the start of the
@@ -583,21 +593,19 @@ public class CoyoteAdapter implements Adapter {
     protected boolean postParseRequest(org.apache.coyote.Request req, Request request,
             org.apache.coyote.Response res, Response response) throws IOException, ServletException {
 
-        // If the processor has set the scheme (AJP does this, HTTP does this if
-        // SSL is enabled) use this to set the secure flag as well. If the
-        // processor hasn't set it, use the settings from the connector
+        // 先统一 scheme / secure。
+        // 协议层如果已经识别到 HTTPS/AJP，就优先使用协议层结论。
         if (req.scheme().isNull()) {
-            // Use connector scheme and secure configuration, (defaults to
-            // "http" and false respectively)
+            // 协议层没有给值时，回退到 Connector 的默认配置。
             req.scheme().setString(connector.getScheme());
             request.setSecure(connector.getSecure());
         } else {
-            // Use processor specified scheme to determine secure state
+            // 协议层已经给出 scheme，则据此判断 secure。
             request.setSecure(req.scheme().equals("https"));
         }
 
-        // At this point the Host header has been processed.
-        // Override if the proxyPort/proxyHost are set
+        // Host 头已由协议层读取完成。
+        // 如果 Connector 配置了 proxyName / proxyPort，这里要改写成代理视角的主机和端口。
         String proxyName = connector.getProxyName();
         int proxyPort = connector.getProxyPort();
         if (proxyPort != 0) {
@@ -614,9 +622,10 @@ public class CoyoteAdapter implements Adapter {
             req.serverName().setString(proxyName);
         }
 
+        // 请求的 uri
         MessageBytes undecodedURI = req.requestURI();
 
-        // Check for ping OPTIONS * request
+        // 特殊处理 OPTIONS *，这类请求不走正常的容器映射链路。
         if (undecodedURI.equals("*")) {
             if (req.method().equalsIgnoreCase("OPTIONS")) {
                 StringBuilder allow = new StringBuilder();
@@ -637,27 +646,24 @@ public class CoyoteAdapter implements Adapter {
         MessageBytes decodedURI = req.decodedURI();
 
         if (undecodedURI.getType() == MessageBytes.T_BYTES) {
-            // Copy the raw URI to the decodedURI
+            // 后续所有处理都基于 decodedURI 展开，先复制一份原始 URI。
             decodedURI.duplicate(undecodedURI);
 
-            // Parse (and strip out) the path parameters
+            // 解析并剥离路径参数，例如 ;jsessionid=...
             parsePathParameters(req, request);
 
-            // URI decoding
-            // %xx decoding of the URL
+            // 做 %xx 解码。
             try {
+                // url解码
                 req.getURLDecoder().convert(decodedURI.getByteChunk(), connector.getEncodedSolidusHandlingInternal());
             } catch (IOException ioe) {
                 response.sendError(400, "Invalid URI: " + ioe.getMessage());
             }
-            // Normalization
+            // 做路径规范化，防止 /../ 等非法路径。
             if (normalize(req.decodedURI())) {
-                // Character decoding
+                // 再把字节 URI 转成字符 URI。
                 convertURI(decodedURI, request);
-                // Check that the URI is still normalized
-                // Note: checkNormalize is deprecated because the test is no
-                //       longer required in Tomcat 10 onwards and has been
-                //       removed
+                // Tomcat 9 仍保留二次规范化校验。
                 if (!checkNormalize(req.decodedURI())) {
                     response.sendError(400, "Invalid URI");
                 }
@@ -682,7 +688,7 @@ public class CoyoteAdapter implements Adapter {
             }
         }
 
-        // Request mapping.
+        // 下面开始做容器映射：host -> context -> wrapper。
         MessageBytes serverName;
         if (connector.getUseIPVHosts()) {
             serverName = req.localName();
@@ -691,11 +697,12 @@ public class CoyoteAdapter implements Adapter {
                 res.action(ActionCode.REQ_LOCAL_NAME_ATTRIBUTE, null);
             }
         } else {
+            // 获取请求的 serverName
             serverName = req.serverName();
         }
 
-        // Version for the second mapping loop and
-        // Context that we expect to get for that version
+        // 并行部署时，同一 context path 可能对应多个版本。
+        // 如果根据 session 粘到旧版本，后续会触发第二轮 map。
         String version = null;
         Context versionContext = null;
         boolean mapRequired = true;
@@ -708,13 +715,12 @@ public class CoyoteAdapter implements Adapter {
         }
 
         while (mapRequired) {
-            // This will map the the latest version by default
+            // 默认先映射到“当前最新版本”的 Context。
             connector.getService().getMapper().map(serverName, decodedURI,
                     version, request.getMappingData());
 
-            // If there is no context at this point, either this is a 404
-            // because no ROOT context has been deployed or the URI was invalid
-            // so no context could be mapped.
+            // 这里如果没有 Context，说明 host/context 没匹配上。
+            // 但请求仍可继续往下走，让 rewrite/error valve 兜底处理。
             if (request.getContext() == null) {
                 // Allow processing to continue.
                 // If present, the rewrite Valve may rewrite this to a valid
@@ -726,9 +732,7 @@ public class CoyoteAdapter implements Adapter {
                 return true;
             }
 
-            // Now we have the context, we can parse the session ID from the URL
-            // (if any). Need to do this before we redirect in case we need to
-            // include the session id in the redirect
+            // 一旦拿到 Context，就可以按应用自己的 session 跟踪策略解析 session id。
             String sessionID;
             if (request.getServletContext().getEffectiveSessionTrackingModes()
                     .contains(SessionTrackingMode.URL)) {
@@ -743,7 +747,7 @@ public class CoyoteAdapter implements Adapter {
                 }
             }
 
-            // Look for session ID in cookies and SSL session
+            // 再尝试 Cookie / SSL 两种 session 来源。
             try {
                 parseSessionCookiesId(request);
             } catch (IllegalArgumentException e) {

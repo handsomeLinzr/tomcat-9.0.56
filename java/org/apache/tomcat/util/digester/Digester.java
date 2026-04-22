@@ -1651,6 +1651,7 @@ public class Digester extends DefaultHandler2 {
     }
 
 
+    // 注册一个规则 setFF
     /**
      * Register a set of Rule instances defined in a RuleSet.
      *

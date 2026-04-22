@@ -62,12 +62,14 @@ public class StandardHost extends ContainerBase implements Host {
     // ----------------------------------------------------------- Constructors
 
 
+    // 构造函数
     /**
      * Create a new StandardHost component with the default basic Valve.
      */
     public StandardHost() {
 
         super();
+        // 则当前自己的责任链添加 StandardHostValve
         pipeline.setBasic(new StandardHostValve());
 
     }
@@ -128,12 +130,14 @@ public class StandardHost extends ContainerBase implements Host {
     private boolean deployOnStartup = true;
 
 
+    // 默认 true
     /**
      * deploy Context XML config files property.
      */
     private boolean deployXML = !Globals.IS_SECURITY_ENABLED;
 
 
+    // 当部署 app 时默认是否需要将 xml 复制到  $CATALINA_BASE/ conf/<engine>/<host> ，默认 false
     /**
      * Should XML files be copied to
      * $CATALINA_BASE/conf/&lt;engine&gt;/&lt;host&gt; by default when
@@ -669,6 +673,7 @@ public class StandardHost extends ContainerBase implements Host {
     }
 
 
+    // 添加 child
     /**
      * Add a child Container, only if the proposed child is an implementation
      * of Context.
@@ -683,6 +688,7 @@ public class StandardHost extends ContainerBase implements Host {
                 (sm.getString("standardHost.notContext"));
         }
 
+        // 添加内存泄露的检测监听器
         child.addLifecycleListener(new MemoryLeakTrackingListener());
 
         // Avoid NPE for case where Context is defined in server.xml with only a
@@ -807,11 +813,14 @@ public class StandardHost extends ContainerBase implements Host {
     @Override
     protected synchronized void startInternal() throws LifecycleException {
 
-        // Set error report valve
+        // Host 先确保错误报告 Valve 就位。
+        // 这样 Host 下的应用如果没有自定义错误页，也还有默认错误响应兜底。
+        // org.apache.catalina.valves.ErrorReportValve
         String errorValve = getErrorReportValveClass();
         if ((errorValve != null) && (!errorValve.equals(""))) {
             try {
                 boolean found = false;
+                // StandardHostValve
                 Valve[] valves = getPipeline().getValves();
                 for (Valve valve : valves) {
                     if (errorValve.equals(valve.getClass().getName())) {
@@ -823,6 +832,8 @@ public class StandardHost extends ContainerBase implements Host {
                     Valve valve = ErrorReportValve.class.getName().equals(errorValve) ?
                         new ErrorReportValve() :
                         (Valve) Class.forName(errorValve).getConstructor().newInstance();
+                    // 将兜底的错误报告 valve 添加到责任链中
+                    // 此时责任链中有 valve 是 StandardHostValve -> ErrorReportValve
                     getPipeline().addValve(valve);
                 }
             } catch (Throwable t) {
@@ -832,6 +843,8 @@ public class StandardHost extends ContainerBase implements Host {
                         errorValve), t);
             }
         }
+        // 再交给 ContainerBase：
+        // 启动所有 Context 子容器，再启动 Host 自己的 pipeline。
         super.startInternal();
     }
 

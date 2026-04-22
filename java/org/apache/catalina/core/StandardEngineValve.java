@@ -44,6 +44,7 @@ final class StandardEngineValve extends ValveBase {
 
     // --------------------------------------------------------- Public Methods
 
+    // 请求处理，从 CoyoteAdapter.service 进来
     /**
      * Select the appropriate child Host to process this request,
      * based on the requested server name.  If no matching Host can
@@ -59,7 +60,7 @@ final class StandardEngineValve extends ValveBase {
     public final void invoke(Request request, Response response)
         throws IOException, ServletException {
 
-        // Select the Host to be used for this Request
+        // Engine 这一层只负责选中目标 Host。
         Host host = request.getHost();
         if (host == null) {
             // HTTP 0.9 or HTTP 1.0 request without a host when no default host
@@ -70,11 +71,12 @@ final class StandardEngineValve extends ValveBase {
             }
             return;
         }
+        // 支持异步，则设置异步
         if (request.isAsyncSupported()) {
             request.setAsyncSupported(host.getPipeline().isAsyncSupported());
         }
 
-        // Ask this Host to process this request
+        // 继续把请求交给 Host pipeline。
         host.getPipeline().getFirst().invoke(request, response);
     }
 }

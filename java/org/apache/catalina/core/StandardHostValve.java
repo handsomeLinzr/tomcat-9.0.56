@@ -99,9 +99,10 @@ final class StandardHostValve extends ValveBase {
     public final void invoke(Request request, Response response)
         throws IOException, ServletException {
 
-        // Select the Context to be used for this Request
+        // Host 这一层负责定位具体 Web 应用，也就是 Context。
         Context context = request.getContext();
         if (context == null) {
+            // 没有拿到 context，失败响应
             // Don't overwrite an existing error
             if (!response.isError()) {
                 response.sendError(404);
@@ -109,6 +110,7 @@ final class StandardHostValve extends ValveBase {
             return;
         }
 
+        // 判断如果支持异步，进行设置
         if (request.isAsyncSupported()) {
             request.setAsyncSupported(context.getPipeline().isAsyncSupported());
         }
@@ -116,6 +118,7 @@ final class StandardHostValve extends ValveBase {
         boolean asyncAtStart = request.isAsync();
 
         try {
+            // 绑定当前 WebApp 的类加载器，后续 listener/filter/servlet 都在这个上下文中执行。
             context.bind(Globals.IS_SECURITY_ENABLED, MY_CLASSLOADER);
 
             if (!asyncAtStart && !context.fireRequestInitEvent(request.getRequest())) {
@@ -126,12 +129,11 @@ final class StandardHostValve extends ValveBase {
                 return;
             }
 
-            // Ask this Context to process this request. Requests that are
-            // already in error must have been routed here to check for
-            // application defined error pages so DO NOT forward them to the the
-            // application for processing.
+            // 继续向下进入 Context pipeline。
+            // 如果当前已经在错误分发阶段，就不会再把请求交给正常业务链。
             try {
                 if (!response.isErrorReportRequired()) {
+                    // 没有错误情况，则调用 contextValve 继续往下执行
                     context.getPipeline().getFirst().invoke(request, response);
                 }
             } catch (Throwable t) {
@@ -158,7 +160,7 @@ final class StandardHostValve extends ValveBase {
                 return;
             }
 
-            // Look for (and render if found) an application level error page
+            // 容器链返回后，如果有错误状态，这里开始尝试渲染应用级错误页。
             if (response.isErrorReportRequired()) {
                 // If an error has occurred that prevents further I/O, don't waste time
                 // producing an error report that will never be read
@@ -177,8 +179,7 @@ final class StandardHostValve extends ValveBase {
                 context.fireRequestDestroyEvent(request.getRequest());
             }
         } finally {
-            // Access a session (if present) to update last accessed time, based
-            // on a strict interpretation of the specification
+            // 退出前补刷 session 访问时间，并解除类加载器绑定。
             if (ACCESS_SESSION) {
                 request.getSession(false);
             }

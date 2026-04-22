@@ -59,6 +59,7 @@ public final class Parameters {
     private final MessageBytes decodedQuery = MessageBytes.newInstance();
 
     private Charset charset = StandardCharsets.ISO_8859_1;
+    // 默认参数用 UTF-8
     private Charset queryStringCharset = StandardCharsets.UTF_8;
 
     private int limit = -1;

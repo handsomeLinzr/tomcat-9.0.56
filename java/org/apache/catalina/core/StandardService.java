@@ -94,6 +94,7 @@ public class StandardService extends LifecycleMBeanBase implements Service {
     protected final Mapper mapper = new Mapper();
 
 
+    // 映射
     /**
      * Mapper listener.
      */
@@ -425,32 +426,38 @@ public class StandardService extends LifecycleMBeanBase implements Service {
         if(log.isInfoEnabled()) {
             log.info(sm.getString("standardService.start.name", this.name));
         }
+        // Service 把“一个 Engine + 一组 Connector”组织在一起。
+        // 启动顺序非常重要：先容器，后连接器。
+        // 否则端口先接到请求，但容器映射表还没准备好，就会出问题。
         // 设置状态
         setState(LifecycleState.STARTING);
 
-        // Start our defined Container first
+        // 第 1 步：先启动容器树入口 Engine。
+        // Engine 再往下会带起 Host / Context / Wrapper。
         if (engine != null) {
             synchronized (engine) {
-                // 如果设置了 engine 引擎，则启动对应的 engine
                 engine.start();
             }
         }
 
         synchronized (executors) {
             for (Executor executor: executors) {
-                // 启动所有的 executor 线程池f
+                // 第 2 步：再启动 Service 自己声明的业务线程池。
                 executor.start();
             }
         }
 
-        // 启动 mapperListener
+        // 第 3 步：启动 MapperListener。
+        // 它会把 Host/Context/Wrapper 注册进 Mapper，供请求阶段快速路由。
         mapperListener.start();
 
-        // Start our defined Connectors second
+        // 第 4 步：最后才启动 Connector 打开端口。
+        // 到这里，请求链所需的容器映射和基础组件都已经就绪了。
         synchronized (connectorsLock) {
             for (Connector connector: connectors) {
                 // If it has already failed, don't try and start it
                 if (connector.getState() != LifecycleState.FAILED) {
+                    // 启动监听
                     connector.start();
                 }
             }
@@ -541,23 +548,24 @@ public class StandardService extends LifecycleMBeanBase implements Service {
         super.initInternal();
 
         if (engine != null) {
-            // 最后调用了 getRealm()，权限
+            // 先初始化容器树入口 Engine。
+
             engine.init();
         }
 
-        // Initialize any Executors
+        // 初始化 Service 级执行器。
         for (Executor executor : findExecutors()) {
             if (executor instanceof JmxEnabled) {
                 ((JmxEnabled) executor).setDomain(getDomain());
             }
-            // 如果有设置了线程池，则初始化
             executor.init();
         }
 
-        // Initialize mapper listener
+        // 提前初始化 MapperListener，但真正开始监听变化要等 start()。
         mapperListener.init();
 
-        // Initialize our defined Connectors
+        // 初始化全部 Connector。
+        // 注意这里仍然只是 init，不会真正 accept 请求。
         synchronized (connectorsLock) {
             for (Connector connector : connectors) {
                 connector.init();

@@ -37,6 +37,7 @@ public abstract class AbstractJsseEndpoint<S,U> extends AbstractEndpoint<S,U> {
     private String sslImplementationName = null;
     private int sniParseLimit = 64 * 1024;
 
+    // OpenSSLImplementation
     private SSLImplementation sslImplementation = null;
 
     public String getSslImplementationName() {
@@ -64,11 +65,15 @@ public abstract class AbstractJsseEndpoint<S,U> extends AbstractEndpoint<S,U> {
     }
 
 
+    // 如果开启了 ssl，则进行初始化 ssl 相关
     protected void initialiseSsl() throws Exception {
+        // 判断是否支持 ssl
         if (isSSLEnabled()) {
+            // 反射创建 OpenSSLImplementation 给到 sslImplementation
             sslImplementation = SSLImplementation.getInstance(getSslImplementationName());
 
             for (SSLHostConfig sslHostConfig : sslHostConfigs.values()) {
+                // 创建 sslContext
                 createSSLContext(sslHostConfig);
             }
 

@@ -654,6 +654,7 @@ public class Tomcat {
 
         server = new StandardServer();
 
+        // 初始化 base 目录
         initBaseDir();
 
         // Set configuration source
@@ -661,8 +662,10 @@ public class Tomcat {
 
         server.setPort( -1 );
 
+        // 创建一个 tomcat service
         Service service = new StandardService();
         service.setName("Tomcat");
+        // 添加到 services 中
         server.addService(service);
         return server;
     }
@@ -849,6 +852,7 @@ public class Tomcat {
     }
 
 
+    // 初始化 base 目录
     protected void initBaseDir() {
         String catalinaHome = System.getProperty(Globals.CATALINA_HOME_PROP);
         if (basedir == null) {
@@ -862,6 +866,7 @@ public class Tomcat {
             basedir = System.getProperty("user.dir") + "/tomcat." + port;
         }
 
+        // fd 句柄
         File baseFile = new File(basedir);
         if (baseFile.exists()) {
             if (!baseFile.isDirectory()) {

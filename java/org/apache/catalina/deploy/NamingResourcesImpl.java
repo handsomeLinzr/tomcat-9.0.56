@@ -90,6 +90,7 @@ public class NamingResourcesImpl extends LifecycleMBeanBase
     // ----------------------------------------------------- Instance Variables
 
 
+    // 对应关联的 server
     /**
      * Associated container object.
      */

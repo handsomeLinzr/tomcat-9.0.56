@@ -463,6 +463,7 @@ public final class MessageBytes implements Cloneable, Serializable {
         return upper.indexOf( sU, starting );
     }
 
+    // 复制一份源信息数据
     /**
      * Copy the src into this MessageBytes, allocating more space if needed.
      * @param src The source

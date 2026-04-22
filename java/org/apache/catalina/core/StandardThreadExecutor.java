@@ -66,6 +66,7 @@ public class StandardThreadExecutor extends LifecycleMBeanBase
      */
     protected int maxIdleTime = 60000;
 
+    // 在 start 的时候创建
     /**
      * The executor we use for this component
      */

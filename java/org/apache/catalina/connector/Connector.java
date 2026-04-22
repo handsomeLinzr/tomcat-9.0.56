@@ -232,6 +232,7 @@ public class Connector extends LifecycleMBeanBase  {
      */
     protected String parseBodyMethods = "POST";
 
+    // 添加了“POST”的字符串集合
     /**
      * A Set of methods determined by {@link #parseBodyMethods}.
      */
@@ -527,6 +528,7 @@ public class Connector extends LifecycleMBeanBase  {
     }
 
 
+    // 设置 http 请求方法，默认是 “POST”
     /**
      * Set list of HTTP methods which should allow body parameter
      * parsing. This defaults to <code>POST</code>.
@@ -538,6 +540,7 @@ public class Connector extends LifecycleMBeanBase  {
         HashSet<String> methodSet = new HashSet<>();
 
         if (null != methods) {
+            // methodSet 添加 methods
             methodSet.addAll(Arrays.asList(methods.split("\\s*,\\s*")));
         }
 
@@ -557,6 +560,9 @@ public class Connector extends LifecycleMBeanBase  {
 
 
     /**
+     *
+     * 返回监听的端口，在 server.xml 中 connector 设置了 8080 端口
+     *
      * @return the port number on which this connector is configured to listen
      * for requests. The special value of 0 means select a random free port
      * when the socket is bound.
@@ -565,6 +571,7 @@ public class Connector extends LifecycleMBeanBase  {
         // Try shortcut that should work for nearly all uses first as it does
         // not use reflection and is therefore faster.
         if (protocolHandler instanceof AbstractProtocol<?>) {
+            // 8080
             return ((AbstractProtocol<?>) protocolHandler).getPort();
         }
         // Fall back for custom protocol handlers not based on AbstractProtocol
@@ -1018,18 +1025,21 @@ public class Connector extends LifecycleMBeanBase  {
                     sm.getString("coyoteConnector.protocolHandlerInstantiationFailed"));
         }
 
-        // 适配器，解析协议用
-        // Initialize adapter
+        // Connector 是 Catalina 与 Coyote 的连接点。
+        // init 阶段最关键的动作，就是把两边通过 CoyoteAdapter 粘起来。
         adapter = new CoyoteAdapter(this);
-        // 设置适配器，设置协议适配器
+        // ProtocolHandler 以后收到请求，就会回调这个 Adapter 进入 Catalina。
         protocolHandler.setAdapter(adapter);
         if (service != null) {
-            // 给协议处理器设置公共线程池，用的和 server 的公共线程池
+            // 协议层的一些定时任务复用 Server 的公共线程池。
+            // 设置给对应 endpoint 的 utilityExecutor
             protocolHandler.setUtilityExecutor(service.getServer().getUtilityExecutor());
         }
 
+        // 确保有一个默认的 parseBodyMethodsSet
         // Make sure parseBodyMethodsSet has a default
         if (null == parseBodyMethodsSet) {
+            // “POST”
             setParseBodyMethods(getParseBodyMethods());
         }
 
@@ -1053,7 +1063,11 @@ public class Connector extends LifecycleMBeanBase  {
         }
 
         try {
-            // 初始化协议处理器
+            // 真正往下进入 Coyote：
+            // ProtocolHandler.init()
+            // -> AbstractProtocol.init()
+            // -> Endpoint.init()
+            // 到这里网络层的底层资源会准备好，但还没有正式开始对外接收请求。
             protocolHandler.init();
         } catch (Exception e) {
             throw new LifecycleException(
@@ -1070,6 +1084,8 @@ public class Connector extends LifecycleMBeanBase  {
     @Override
     protected void startInternal() throws LifecycleException {
 
+        // start 阶段才真正打开对外服务能力。
+        // 前面的 init 只是准备资源；这里才会走到 ProtocolHandler.start()/Endpoint.start()。
         // Validate settings before starting
         String id = (protocolHandler != null) ? protocolHandler.getId() : null;
         if (id == null && getPortWithOffset() < 0) {
@@ -1080,6 +1096,7 @@ public class Connector extends LifecycleMBeanBase  {
         setState(LifecycleState.STARTING);
 
         try {
+            // 启动协议处理器后，Acceptor/Poller/Worker 才会开始工作，端口也才真正可用。
             protocolHandler.start();
         } catch (Exception e) {
             throw new LifecycleException(

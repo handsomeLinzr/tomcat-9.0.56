@@ -35,6 +35,7 @@ public abstract class SocketProcessorBase<S> implements Runnable {
     }
 
 
+    // 处理 socket 事件
     @Override
     public final void run() {
         synchronized (socketWrapper) {
@@ -44,8 +45,10 @@ public abstract class SocketProcessorBase<S> implements Runnable {
             // first event to be processed results in the socket being closed,
             // the subsequent events are not processed.
             if (socketWrapper.isClosed()) {
+                // 如果已经关闭，则直接返回
                 return;
             }
+            // 运行逻辑
             doRun();
         }
     }

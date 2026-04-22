@@ -84,12 +84,18 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
     // ----------------------------------------------------- Instance Variables
 
 
+    // 通过方法 setBasic 设置，指向 pipeline 的最后一个
+    // Engine -> StandardEngineValve
+    // Host -> ErrorReportValve -> StandardHostValve
+    // Context -> StandardContextValve
+    // Wrapper -> StandardWrapperValve
     /**
      * The basic Valve (if any) associated with this Pipeline.
      */
     protected Valve basic = null;
 
 
+    // 设置关联的容器，这里走到的是 engine
     /**
      * The Container with which this Pipeline is associated.
      */
@@ -156,6 +162,7 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
     }
 
 
+    // 启动责任链
     /**
      * Start {@link Valve}s) in this pipeline and implement the requirements
      * of {@link LifecycleBase#startInternal()}.
@@ -171,6 +178,7 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
         if (current == null) {
             current = basic;
         }
+        // 遍历责任链每个节点，调用 start
         while (current != null) {
             if (current instanceof Lifecycle) {
                 ((Lifecycle) current).start();
@@ -178,6 +186,7 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             current = current.getNext();
         }
 
+        // 设置状态为 starting
         setState(LifecycleState.STARTING);
     }
 
@@ -254,6 +263,7 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
     @Override
     public void setBasic(Valve valve) {
 
+        // 获取当前的 basic，一开始是 null
         // Change components if necessary
         Valve oldBasic = this.basic;
         if (oldBasic == valve) {
@@ -282,7 +292,9 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
         if (valve == null) {
             return;
         }
+        // StandardEngineValve 属于 Contained
         if (valve instanceof Contained) {
+            // 设置关联的容器是 pipeline 的关联的 container
             ((Contained) valve).setContainer(this.container);
         }
         if (getState().isAvailable() && valve instanceof Lifecycle) {
@@ -304,6 +316,7 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             current = current.getNext();
         }
 
+        // 赋值 basic 为传进来的 valve
         this.basic = valve;
 
     }

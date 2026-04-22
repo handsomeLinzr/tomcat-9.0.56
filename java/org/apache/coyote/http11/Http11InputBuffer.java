@@ -105,6 +105,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
     private InputBuffer inputStreamInputBuffer;
 
 
+    // 过滤器库
     /**
      * Filter library.
      * Note: Filter[Constants.CHUNKED_FILTER] is always the "chunked" filter.

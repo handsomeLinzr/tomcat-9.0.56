@@ -53,9 +53,11 @@ public class ContainerMBean extends BaseCatalinaMBean<ContainerBase> {
         contained.setName(name);
 
         if(contained instanceof StandardHost){
+            // HostConfig 添加到监听中
             HostConfig config = new HostConfig();
             contained.addLifecycleListener(config);
         } else if(contained instanceof StandardContext){
+            // context，则添加 ContextConfig 到监听中
             ContextConfig config = new ContextConfig();
             contained.addLifecycleListener(config);
         }

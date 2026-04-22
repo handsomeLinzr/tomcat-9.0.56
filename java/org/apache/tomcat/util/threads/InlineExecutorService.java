@@ -64,6 +64,7 @@ public class InlineExecutorService extends AbstractExecutorService {
         }
     }
 
+    // tomcat 自定义的线程池，自定义处理过程
     @Override
     public void execute(Runnable command) {
         synchronized (lock) {

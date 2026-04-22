@@ -162,6 +162,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
     protected final HashMap<String, Container> children = new HashMap<>();
 
 
+    // 在构造函数 StandardEngine 构造函数设置成了 10
     /**
      * The processor delay for this component.
      */
@@ -219,6 +220,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
     protected ClassLoader parentClassLoader = null;
 
 
+    // 责任链
     /**
      * The Pipeline object with which this Container is associated.
      */
@@ -269,6 +271,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
      */
     private int startStopThreads = 1;
     // 在 init 的时候，调用了 reconfigureStartStopExecutor 方法，设置了 InlineExecutorService
+    // 自定义的线程池
     protected ExecutorService startStopExecutor;
 
 
@@ -718,13 +721,15 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
 
         fireContainerEvent(ADD_CHILD_EVENT, child);
 
-        // Start child
+        // 如果父容器已经启动或正在启动，新加进来的子容器要立刻补启动。
+        // 这也是运行期动态部署 Context / Wrapper 时能立即生效的原因。
         // Don't do this inside sync block - start can be a slow process and
         // locking the children object can cause problems elsewhere
         try {
             if ((getState().isAvailable() ||
                     LifecycleState.STARTING_PREP.equals(getState())) &&
                     startChildren) {
+                // 动态部署关键
                 child.start();
             }
         } catch (LifecycleException e) {
@@ -872,7 +877,8 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
 
     @Override
     protected void initInternal() throws LifecycleException {
-        // getStartStopThreads = 1
+        // 准备容器树启动/停止使用的执行器。
+        // Engine/Host/Context 启子容器时都会走到它。
         reconfigureStartStopExecutor(getStartStopThreads());
         super.initInternal();
     }
@@ -903,6 +909,13 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
     @Override
     protected synchronized void startInternal() throws LifecycleException {
 
+        // ContainerBase 是各级容器的公共启动骨架。
+        // 标准顺序是：
+        // 1. 启动 cluster / realm
+        // 2. 启动所有子容器
+        // 3. 启动当前容器自己的 pipeline
+        // 这样请求从上到下流经容器树时，每一层都已经准备好了。
+
         // Start our subordinate components, if any
         logger = null;
         getLogger();
@@ -915,10 +928,12 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
             ((Lifecycle) realm).start();
         }
 
-        // Start our child containers, if any
+        // 把启动动作继续向下传播给子容器。
+        // Engine 的子容器是 Host，Host 的子容器是 Context，Context 的子容器是 Wrapper。
         Container children[] = findChildren();
         List<Future<Void>> results = new ArrayList<>();
         for (Container child : children) {
+            // new StartChild(child) 将 child 包装成一个 callback 对象
             results.add(startStopExecutor.submit(new StartChild(child)));
         }
 
@@ -926,6 +941,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
 
         for (Future<Void> result : results) {
             try {
+                // 等待子容器执行完 start 方法
                 result.get();
             } catch (Throwable e) {
                 log.error(sm.getString("containerBase.threadedStartFailed"), e);
@@ -941,11 +957,12 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
                     multiThrowable.getThrowable());
         }
 
-        // Start the Valves in our pipeline (including the basic), if any
+        // 子容器起来后，再启动本层的 Valve 链。
         if (pipeline instanceof Lifecycle) {
             ((Lifecycle) pipeline).start();
         }
 
+        // 触发 HostConfig 的 START_EVENT 事件
         setState(LifecycleState.STARTING);
 
         // Start our thread
@@ -1128,6 +1145,8 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
      * Execute a periodic task, such as reloading, etc. This method will be
      * invoked inside the classloading context of this container. Unexpected
      * throwables will be caught and logged.
+     *
+     * 执行一个周期性任务，例如重新加载等。此方法将在该容器的类加载上下文中被调用。意外抛出的异常将被捕获并记录下来。
      */
     @Override
     public void backgroundProcess() {
@@ -1277,6 +1296,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
 
     // -------------------- Background Thread --------------------
 
+    // 启动后台线程，定期检查 session 是否超时
     /**
      * Start the background thread that will periodically check for
      * session timeouts.
@@ -1293,6 +1313,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
                     log.error(sm.getString("containerBase.backgroundProcess.error"), e);
                 }
             }
+            // server 公共线程池处理，10秒一次，处理过程是 ContainerBackgroundProcessor
             backgroundProcessorFuture = Container.getService(this).getServer().getUtilityExecutor()
                     .scheduleWithFixedDelay(new ContainerBackgroundProcessor(),
                             backgroundProcessorDelay, backgroundProcessorDelay,
@@ -1386,6 +1407,8 @@ public abstract class ContainerBase extends LifecycleMBeanBase implements Contai
 
     // ---------------------------- Inner classes used with start/stop Executor
 
+    // 子容器的包装
+    // 包装成一个 Callable 对象，call 方法调用 child 的 start 方法
     private static class StartChild implements Callable<Void> {
 
         private Container child;

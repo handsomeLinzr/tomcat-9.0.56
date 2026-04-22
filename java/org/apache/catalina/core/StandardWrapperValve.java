@@ -87,7 +87,8 @@ final class StandardWrapperValve extends ValveBase {
     public final void invoke(Request request, Response response)
         throws IOException, ServletException {
 
-        // Initialize local variables we may need
+        // 走到 Wrapper 说明已经精确路由到某个 Servlet。
+        // 这一层的核心职责是：拿 Servlet 实例、创建 FilterChain、调用 service()。
         boolean unavailable = false;
         Throwable throwable = null;
         // This should be a Request attribute...
@@ -97,14 +98,14 @@ final class StandardWrapperValve extends ValveBase {
         Servlet servlet = null;
         Context context = (Context) wrapper.getParent();
 
-        // Check for the application being marked unavailable
+        // 先看所属应用 Context 是否可用。
         if (!context.getState().isAvailable()) {
             response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE,
                            sm.getString("standardContext.isUnavailable"));
             unavailable = true;
         }
 
-        // Check for the servlet being marked unavailable
+        // 再看目标 Servlet 是否可用。
         if (!unavailable && wrapper.isUnavailable()) {
             container.getLogger().info(sm.getString("standardWrapper.isUnavailable",
                     wrapper.getName()));
@@ -122,9 +123,10 @@ final class StandardWrapperValve extends ValveBase {
             unavailable = true;
         }
 
-        // Allocate a servlet instance to process this request
+        // 分配 Servlet 实例。单实例 Servlet 一般会返回容器缓存的那个实例。
         try {
             if (!unavailable) {
+                // 得到对应的 servlet
                 servlet = wrapper.allocate();
             }
         } catch (UnavailableException e) {
@@ -164,12 +166,11 @@ final class StandardWrapperValve extends ValveBase {
         request.setAttribute(Globals.DISPATCHER_TYPE_ATTR,dispatcherType);
         request.setAttribute(Globals.DISPATCHER_REQUEST_PATH_ATTR,
                 requestPathMB);
-        // Create the filter chain for this request
+        // 根据请求和目标 Wrapper 组装过滤器链。
         ApplicationFilterChain filterChain =
                 ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
 
-        // Call the filter chain for this request
-        // NOTE: This also calls the servlet's service() method
+        // 执行 FilterChain，链条走到底就会进入 servlet.service()。
         Container container = this.container;
         try {
             if ((servlet != null) && (filterChain != null)) {
@@ -180,6 +181,7 @@ final class StandardWrapperValve extends ValveBase {
                         if (request.isAsyncDispatching()) {
                             request.getAsyncContextInternal().doInternalDispatch();
                         } else {
+                            // 过滤器执行
                             filterChain.doFilter(request.getRequest(),
                                     response.getResponse());
                         }
@@ -253,6 +255,7 @@ final class StandardWrapperValve extends ValveBase {
         } finally {
             // Release the filter chain (if any) for this request
             if (filterChain != null) {
+                // 释放过滤器
                 filterChain.release();
             }
 

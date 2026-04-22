@@ -83,6 +83,7 @@ public class JspServlet extends HttpServlet implements PeriodicEventListener {
     public void init(ServletConfig config) throws ServletException {
 
         super.init(config);
+        // 设置属性
         this.config = config;
         this.context = config.getServletContext();
 

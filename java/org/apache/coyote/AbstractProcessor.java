@@ -49,6 +49,7 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
     // Used to avoid useless B2C conversion on the host name.
     private char[] hostNameC = new char[0];
 
+    // 构造函数，设置了 CoyoteAdapter
     protected final Adapter adapter;
     protected final AsyncStateMachine asyncStateMachine;
     private volatile long asyncTimeout = -1;
@@ -62,8 +63,8 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
      * current async generation. This prevents the response mix-up.
      */
     private volatile long asyncTimeoutGeneration = 0;
-    protected final Request request;
-    protected final Response response;
+    protected final Request request;  // 默认构造函数的时候创建 new Request()
+    protected final Response response;  // 默认构造函数的时候创建 new Response()
     protected volatile SocketWrapperBase<?> socketWrapper = null;
     protected volatile SSLSupport sslSupport;
 
@@ -83,8 +84,8 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
     protected AbstractProcessor(Adapter adapter, Request coyoteRequest, Response coyoteResponse) {
         this.adapter = adapter;
         asyncStateMachine = new AsyncStateMachine(this);
-        request = coyoteRequest;
-        response = coyoteResponse;
+        request = coyoteRequest;  // new Request()
+        response = coyoteResponse;  // new Request()
         response.setHook(this);
         request.setResponse(response);
         request.setHook(this);
@@ -275,7 +276,9 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
 
     protected void parseHost(MessageBytes valueMB) {
         if (valueMB == null || valueMB.isNull()) {
+            // 主机，默认空实现
             populateHost();
+            // 端口
             populatePort();
             return;
         } else if (valueMB.getLength() == 0) {

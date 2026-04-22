@@ -116,6 +116,7 @@ public class HostConfig implements LifecycleListener {
     protected ObjectName oname = null;
 
 
+    // true
     /**
      * Should we deploy XML Context config files packaged with WAR files and
      * directories?
@@ -131,6 +132,7 @@ public class HostConfig implements LifecycleListener {
     protected boolean copyXML = false;
 
 
+    // true
     /**
      * Should we unpack WAR files when auto-deploying applications in the
      * <code>appBase</code> directory?
@@ -138,6 +140,7 @@ public class HostConfig implements LifecycleListener {
     protected boolean unpackWARs = false;
 
 
+    // 已经发布的 context 和对应的 DeployedApplication 对象
     /**
      * Map of deployed applications.
      */
@@ -288,6 +291,7 @@ public class HostConfig implements LifecycleListener {
     // --------------------------------------------------------- Public Methods
 
 
+    // start 事件
     /**
      * Process the START event for an associated Host.
      *
@@ -298,8 +302,11 @@ public class HostConfig implements LifecycleListener {
 
         // Identify the host we are associated with
         try {
+            // 当前 host
             host = (Host) event.getLifecycle();
+            // 默认 true
             if (host instanceof StandardHost) {
+                // 设置属性
                 setCopyXML(((StandardHost) host).isCopyXML());
                 setDeployXML(((StandardHost) host).isDeployXML());
                 setUnpackWARs(((StandardHost) host).isUnpackWARs());
@@ -314,8 +321,10 @@ public class HostConfig implements LifecycleListener {
         if (event.getType().equals(Lifecycle.PERIODIC_EVENT)) {
             check();
         } else if (event.getType().equals(Lifecycle.BEFORE_START_EVENT)) {
+            // 启动前调用处理
             beforeStart();
         } else if (event.getType().equals(Lifecycle.START_EVENT)) {
+            // 启动
             start();
         } else if (event.getType().equals(Lifecycle.STOP_EVENT)) {
             stop();
@@ -466,11 +475,14 @@ public class HostConfig implements LifecycleListener {
      * in our "application root" directory.
      */
     protected void deployApps() {
+        // webapps
         File appBase = host.getAppBaseFile();
+        // 默认的配置文件路径
         File configBase = host.getConfigBaseFile();
         String[] filteredAppPaths = filterAppPaths(appBase.list());
         // Deploy XML descriptors from configBase
         deployDescriptors(configBase, configBase.list());
+        // 发布 war 包
         // Deploy WARs
         deployWARs(appBase, filteredAppPaths);
         // Deploy expanded folders
@@ -784,6 +796,7 @@ public class HostConfig implements LifecycleListener {
                 continue;
             }
 
+            // 获取对应的 war 文件
             File war = new File(appBase, file);
             if (file.toLowerCase(Locale.ENGLISH).endsWith(".war") && war.isFile() && !invalidWars.contains(file)) {
                 ContextName cn = new ContextName(file, true);
@@ -822,6 +835,7 @@ public class HostConfig implements LifecycleListener {
                         }
 
                         // DeployWAR will call removeServiced
+                        // 提交 DeployWar 任务，发布 war 包
                         results.add(es.submit(new DeployWar(this, cn, war)));
                     } catch (Throwable t) {
                         ExceptionUtils.handleThrowable(t);
@@ -887,8 +901,10 @@ public class HostConfig implements LifecycleListener {
      */
     protected void deployWAR(ContextName cn, File war) {
 
+        // 获取 META-INF/context.xml 文件
         File xml = new File(host.getAppBaseFile(), cn.getBaseName() + "/" + Constants.ApplicationContextXml);
 
+        // 获取 /META-INF/war-tracker 文件
         File warTracker = new File(host.getAppBaseFile(), cn.getBaseName() + Constants.WarTracker);
 
         boolean xmlInWar = false;
@@ -918,6 +934,7 @@ public class HostConfig implements LifecycleListener {
             if (deployThisXML && useXml && !copyXML) {
                 synchronized (digesterLock) {
                     try {
+                        // 解析 xml 成一个 Context
                         context = (Context) digester.parse(xml);
                     } catch (Exception e) {
                         log.error(sm.getString("hostConfig.deployDescriptor.error", war.getAbsolutePath()), e);
@@ -928,6 +945,7 @@ public class HostConfig implements LifecycleListener {
                         }
                     }
                 }
+                // 设置对应的 xml 配置文件
                 context.setConfigFile(xml.toURI().toURL());
             } else if (deployThisXML && xmlInWar) {
                 synchronized (digesterLock) {
@@ -1001,6 +1019,7 @@ public class HostConfig implements LifecycleListener {
         }
 
         try {
+            // 使用 WAR 文件填充重新部署的资源
             // Populate redeploy resources with the WAR file
             deployedApp.redeployResources.put(war.getAbsolutePath(), Long.valueOf(war.lastModified()));
 
@@ -1021,6 +1040,8 @@ public class HostConfig implements LifecycleListener {
             context.setPath(cn.getPath());
             context.setWebappVersion(cn.getVersion());
             context.setDocBase(cn.getBaseName() + ".war");
+            // 这里重点，将解析后并设置了配置属性的 context 对象，添加到了当前的 host 的 child 中
+            // 同时如果当前 host 属于 STARTING_PREP 状态，则会马上调用 context 的 start 方法
             host.addChild(context);
         } catch (Throwable t) {
             ExceptionUtils.handleThrowable(t);
@@ -1577,6 +1598,7 @@ public class HostConfig implements LifecycleListener {
 
 
     public void beforeStart() {
+        // 默认 true
         if (host.getCreateDirs()) {
             File[] dirs = new File[] {host.getAppBaseFile(),host.getConfigBaseFile()};
             for (File dir : dirs) {
@@ -1588,6 +1610,7 @@ public class HostConfig implements LifecycleListener {
     }
 
 
+    // host 的启动事件过程
     /**
      * Process a "start" event for this Host.
      */
@@ -1598,6 +1621,7 @@ public class HostConfig implements LifecycleListener {
         }
 
         try {
+            // host 名称
             ObjectName hostON = host.getObjectName();
             oname = new ObjectName
                 (hostON.getDomain() + ":type=Deployer,host=" + host.getName());
@@ -1615,6 +1639,7 @@ public class HostConfig implements LifecycleListener {
         }
 
         if (host.getDeployOnStartup()) {
+            // 发布 apps
             deployApps();
         }
     }
@@ -1908,6 +1933,7 @@ public class HostConfig implements LifecycleListener {
         @Override
         public void run() {
             try {
+                // 发布 war 包
                 config.deployWAR(cn, war);
             } finally {
                 config.removeServiced(cn.getName());

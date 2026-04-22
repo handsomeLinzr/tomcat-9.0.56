@@ -27,30 +27,41 @@ package org.apache.tomcat.util.collections;
  */
 public class SynchronizedQueue<T> {
 
+    // 默认队列大小128
     public static final int DEFAULT_SIZE = 128;
 
+    // 用于放置对象的数组
     private Object[] queue;
     private int size;
+    // 下一个要放入的位置
     private int insert = 0;
+    // 下一个要获取的位置
     private int remove = 0;
 
     public SynchronizedQueue() {
+        // 默认 128
         this(DEFAULT_SIZE);
     }
 
     public SynchronizedQueue(int initialSize) {
+        // 创建队列
         queue = new Object[initialSize];
+        // 设置 size 大小
         size = initialSize;
     }
 
     public synchronized boolean offer(T t) {
+        // 将对象放入到数组 queue 中
         queue[insert++] = t;
 
+        // 如果下个要放置的位置，已经到了边界，则重置位置改为 0
         // Wrap
         if (insert == size) {
             insert = 0;
         }
 
+        // 如果下个要放置的位置，已经到了 remove 位置，也就是说，下个要放置的位置已经追上即将被消费的位置了
+        // 则说明数组已经不够了，则需要对数组进行扩容
         if (insert == remove) {
             expand();
         }
@@ -76,12 +87,17 @@ public class SynchronizedQueue<T> {
         return result;
     }
 
+    // 扩容
     private void expand() {
+        // 新数组大小为原来的两倍
         int newSize = size * 2;
         Object[] newQueue = new Object[newSize];
 
+        // 从原来的 insert 后的位置到最大，先复制到新数组的0开始
         System.arraycopy(queue, insert, newQueue, 0, size - insert);
+        // 再从原来的0开始到，复制到新数组
         System.arraycopy(queue, 0, newQueue, size - insert, insert);
+        // 前边分两次复制，是为了保持顺序，从0开始往后
 
         insert = size;
         remove = 0;
