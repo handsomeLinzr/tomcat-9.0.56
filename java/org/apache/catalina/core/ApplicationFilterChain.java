@@ -68,6 +68,7 @@ public final class ApplicationFilterChain implements FilterChain {
 
     // ----------------------------------------------------- Instance Variables
 
+    // 当前请求的过滤器
     /**
      * Filters.
      */
@@ -87,6 +88,7 @@ public final class ApplicationFilterChain implements FilterChain {
     private int n = 0;
 
 
+    // 对应过滤器走到底时需要调用的 servlet
     /**
      * The servlet instance to be executed by this chain.
      */
@@ -159,11 +161,12 @@ public final class ApplicationFilterChain implements FilterChain {
                 }
             }
         } else {
-            // 处理过滤器
+            // 处理过滤器；链条内部会递归/迭代调用下一个 Filter，直到进入 Servlet。
             internalDoFilter(request,response);
         }
     }
 
+    // 责任链，内部调用
     private void internalDoFilter(ServletRequest request,
                                   ServletResponse response)
         throws IOException, ServletException {
@@ -173,6 +176,7 @@ public final class ApplicationFilterChain implements FilterChain {
         if (pos < n) {
             ApplicationFilterConfig filterConfig = filters[pos++];
             try {
+                // 过滤器
                 Filter filter = filterConfig.getFilter();
 
                 if (request.isAsyncSupported() && "false".equalsIgnoreCase(
@@ -189,7 +193,8 @@ public final class ApplicationFilterChain implements FilterChain {
                     Object[] args = new Object[]{req, res, this};
                     SecurityUtil.doAsPrivilege ("doFilter", filter, classType, args, principal);
                 } else {
-                    // 执行过滤器逻辑
+                    // 执行过滤器逻辑。Filter 如果继续调用 chain.doFilter()，会回到本方法处理下一个节点。
+                    // 所以，过滤器比 service 方法还早执行，肯定也比SpringMVC 的拦截器早
                     filter.doFilter(request, response, this);
                 }
             } catch (IOException | ServletException | RuntimeException e) {
@@ -228,7 +233,8 @@ public final class ApplicationFilterChain implements FilterChain {
                                            args,
                                            principal);
             } else {
-                // 真正进入业务 Servlet 的位置。
+                // 真正进入业务 Servlet 的位置，调用到了具体的 servlet 的 service 方法
+                // 到这里说明 host/context/wrapper 已全部匹配完成，Filter 也全部执行完毕。
                 servlet.service(request, response);
             }
         } catch (IOException | ServletException | RuntimeException e) {
@@ -280,16 +286,19 @@ public final class ApplicationFilterChain implements FilterChain {
         // Prevent the same filter being added multiple times
         for(ApplicationFilterConfig filter:filters) {
             if(filter==filterConfig) {
+                // 如果已经存在了，直接返回
                 return;
             }
         }
 
         if (n == filters.length) {
+            // 如果已经达到最大值，扩容
             ApplicationFilterConfig[] newFilters =
                 new ApplicationFilterConfig[n + INCREMENT];
             System.arraycopy(filters, 0, newFilters, 0, n);
             filters = newFilters;
         }
+        // 添加过滤器
         filters[n++] = filterConfig;
 
     }

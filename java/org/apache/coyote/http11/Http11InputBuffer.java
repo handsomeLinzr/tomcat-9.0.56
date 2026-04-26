@@ -68,6 +68,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
     private final boolean rejectIllegalHeader;
 
+    // 默认在构造函数的时候设置成了 true
     /**
      * State.
      */
@@ -99,6 +100,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
     private SocketWrapperBase<?> wrapper;
 
 
+    // 构造函数设置成了 new SocketInputBuffer()
     /**
      * Underlying input buffer.
      */
@@ -131,15 +133,18 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
      */
     private byte prevChr = 0;
     private byte chr = 0;
+    // 构造函数的时候设置成了 true
     private volatile boolean parsingRequestLine;
     private int parsingRequestLinePhase = 0;
     private boolean parsingRequestLineEol = false;
     private int parsingRequestLineStart = 0;
     private int parsingRequestLineQPos = -1;
+    // 构造函数设置成了 HeaderParsePosition.HEADER_START
     private HeaderParsePosition headerParsePos;
     private final HeaderParseData headerData = new HeaderParseData();
     private final HttpParser httpParser;
 
+    // 构造函数默认设置成了 8 * 1024
     /**
      * Maximum allowed size of the HTTP request line plus headers plus any
      * leading blank lines.
@@ -327,6 +332,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
     }
 
 
+    // 读取请求行，解析http请求头的时候用到这个方法，解析请求体的时候不需要用到这个
     /**
      * Read the request line. This function is meant to be used during the
      * HTTP request header parsing. Do NOT attempt to read the request body
@@ -348,6 +354,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
         }
         //
         // Skipping blank lines
+        // 跳过空白行
         //
         if (parsingRequestLinePhase < 2) {
             do {
@@ -602,6 +609,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
         HeaderParseStatus status = HeaderParseStatus.HAVE_MORE_HEADERS;
 
         do {
+            // 解析 header
             status = parseHeader();
             // Checking that
             // (1) Headers plus request line size does not exceed its limit
@@ -614,6 +622,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
             if (byteBuffer.position() > headerBufferSize || byteBuffer.capacity() - byteBuffer.position() < socketReadBufferSize) {
                 throw new IllegalArgumentException(sm.getString("iib.requestheadertoolarge.error"));
             }
+            // 只要还有headers则继续循环解析
         } while (status == HeaderParseStatus.HAVE_MORE_HEADERS);
         if (status == HeaderParseStatus.DONE) {
             parsingHeader = false;
@@ -764,6 +773,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
     // --------------------------------------------------------- Private Methods
 
+    // 尝试读取一些数据到输入缓冲区
     /**
      * Attempts to read some data into the input buffer.
      *
@@ -803,6 +813,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
             byteBuffer.limit(byteBuffer.capacity());
             SocketWrapperBase<?> socketWrapper = this.wrapper;
             if (socketWrapper != null) {
+                // 读到 byteBuffer 缓存中，返回读取的字节数
                 nRead = socketWrapper.read(block, byteBuffer);
             } else {
                 throw new CloseNowException(sm.getString("iib.eof.error"));
@@ -833,6 +844,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
         }
 
         if (nRead > 0) {
+            // 读取到了数据，返回 true
             return true;
         } else if (nRead == -1) {
             throw new EOFException(sm.getString("iib.eof.error"));
@@ -853,27 +865,36 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
         while (headerParsePos == HeaderParsePosition.HEADER_START) {
 
+            // 已经达到缓存的限制，则进行解析
             // Read new bytes if needed
             if (byteBuffer.position() >= byteBuffer.limit()) {
+                // 读取数据到 byteBuffer 缓存
                 if (!fill(false)) {// parse header
                     headerParsePos = HeaderParsePosition.HEADER_START;
                     return HeaderParseStatus.NEED_MORE_DATA;
                 }
             }
 
+            // 上一个字节
             prevChr = chr;
+            // 当前这个字节
             chr = byteBuffer.get();
 
+            // 如果都是 CR，则继续往下读
             if (chr == Constants.CR && prevChr != Constants.CR) {
                 // Possible start of CRLF - process the next byte.
             } else if (chr == Constants.LF) {
+                // 如果是 LF，则表示行结束
                 // CRLF or LF is an acceptable line terminator
                 return HeaderParseStatus.DONE;
             } else {
+                // 上一个是 CR，当前不是 LF，则
                 if (prevChr == Constants.CR) {
+                    // 读两个字节
                     // Must have read two bytes (first was CR, second was not LF)
                     byteBuffer.position(byteBuffer.position() - 2);
                 } else {
+                    // 读一个字节
                     // Must have only read one byte
                     byteBuffer.position(byteBuffer.position() - 1);
                 }

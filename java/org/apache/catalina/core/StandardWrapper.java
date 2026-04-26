@@ -98,6 +98,7 @@ public class StandardWrapper extends ContainerBase
     // ----------------------------------------------------- Instance Variables
 
 
+    // 当前 wrapper 的可用时间
     /**
      * The date and time at which this servlet will become available (in
      * milliseconds since the epoch), or zero if the servlet is available.
@@ -301,6 +302,7 @@ public class StandardWrapper extends ContainerBase
         this.overridable = overridable;
     }
 
+    //  放回该 servlet 的可用时间点
     /**
      * Return the available date/time for this servlet, in milliseconds since
      * the epoch.  If this date/time is Long.MAX_VALUE, it is considered to mean
@@ -1287,6 +1289,7 @@ public class StandardWrapper extends ContainerBase
     }
 
 
+    // 卸载关闭这个 sevlet
     /**
      * Unload all initialized instances of this servlet, after calling the
      * <code>destroy()</code> method for each instance.  This can be used,
@@ -1341,6 +1344,7 @@ public class StandardWrapper extends ContainerBase
                         SecurityUtil.remove(instance);
                     }
                 } else {
+                    // 调用 destroy 销毁方法
                     instance.destroy();
                 }
 

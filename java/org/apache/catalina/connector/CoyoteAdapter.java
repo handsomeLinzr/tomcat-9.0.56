@@ -321,6 +321,8 @@ public class CoyoteAdapter implements Adapter {
     public void service(org.apache.coyote.Request req, org.apache.coyote.Response res)
             throws Exception {
 
+        // Adapter 是 Coyote 与 Catalina 的边界：
+        // 入参 req/res 是协议层对象，下面会转换/复用成 Catalina Request/Response。
         // 先尝试从 coyote request/response 的 note 中取出已经绑定好的
         // catalina request/response。连接复用场景下，这对对象通常会被反复回收再使用。
         Request request = (Request) req.getNote(ADAPTER_NOTES);
@@ -367,6 +369,7 @@ public class CoyoteAdapter implements Adapter {
                 connector.getService().getContainer().getPipeline().getFirst().invoke(
                         request, response);
             }
+            // 异步
             if (request.isAsync()) {
                 async = true;
                 ReadListener readListener = req.getReadListener();
@@ -429,6 +432,7 @@ public class CoyoteAdapter implements Adapter {
                 // Log via the host or engine in that case.
                 long time = System.currentTimeMillis() - req.getStartTime();
                 if (context != null) {
+                    // 日志
                     context.logAccess(request, response, time, false);
                 } else if (response.isError()) {
                     if (host != null) {
@@ -593,6 +597,8 @@ public class CoyoteAdapter implements Adapter {
     protected boolean postParseRequest(org.apache.coyote.Request req, Request request,
             org.apache.coyote.Response res, Response response) throws IOException, ServletException {
 
+        // 请求进入 Catalina 后的核心预处理方法。
+        // 到这个方法结束时，Request.mappingData 应该已经填好 host/context/wrapper。
         // 先统一 scheme / secure。
         // 协议层如果已经识别到 HTTPS/AJP，就优先使用协议层结论。
         if (req.scheme().isNull()) {
@@ -622,7 +628,7 @@ public class CoyoteAdapter implements Adapter {
             req.serverName().setString(proxyName);
         }
 
-        // 请求的 uri
+        // 请求的 uri。此时还是协议层解析出来的原始 request-target。
         MessageBytes undecodedURI = req.requestURI();
 
         // 特殊处理 OPTIONS *，这类请求不走正常的容器映射链路。
@@ -643,6 +649,7 @@ public class CoyoteAdapter implements Adapter {
             }
         }
 
+        // decodedURI 是后续 Mapper 使用的规范化 URI。
         MessageBytes decodedURI = req.decodedURI();
 
         if (undecodedURI.getType() == MessageBytes.T_BYTES) {
@@ -689,6 +696,7 @@ public class CoyoteAdapter implements Adapter {
         }
 
         // 下面开始做容器映射：host -> context -> wrapper。
+        // serverName 对应 HTTP Host 头或代理/IP 虚拟主机配置。
         MessageBytes serverName;
         if (connector.getUseIPVHosts()) {
             serverName = req.localName();
@@ -715,7 +723,13 @@ public class CoyoteAdapter implements Adapter {
         }
 
         while (mapRequired) {
-            // 默认先映射到“当前最新版本”的 Context。
+            // 这里是真正把 request 映射到 host/context/wrapper 的入口。
+            // 注意：Request 本身不负责“查找”，它只是持有一个 MappingData 结果对象；
+            // Mapper.map(...) 会把匹配结果写进 request.getMappingData()，
+            // 后面 request.getHost()/getContext()/getWrapper() 只是把这些结果读出来。
+            //
+            // 第一次循环通常传 version=null，表示先按“当前最新版本”的 Context 去匹配。
+            // 只有并行部署命中旧 session 时，下面才会带着具体 version 再 map 一次。
             connector.getService().getMapper().map(serverName, decodedURI,
                     version, request.getMappingData());
 
@@ -733,6 +747,7 @@ public class CoyoteAdapter implements Adapter {
             }
 
             // 一旦拿到 Context，就可以按应用自己的 session 跟踪策略解析 session id。
+            // Context 匹配完成后，session 规则才能按具体 Web 应用配置解析。
             String sessionID;
             if (request.getServletContext().getEffectiveSessionTrackingModes()
                     .contains(SessionTrackingMode.URL)) {
@@ -815,6 +830,7 @@ public class CoyoteAdapter implements Adapter {
         }
 
         // Possible redirect
+        // Mapper 可能只得出“需要重定向”的结论，例如目录缺少末尾 /。
         MessageBytes redirectPathMB = request.getMappingData().redirectPath;
         if (!redirectPathMB.isNull()) {
             String redirectPath = URLEncoder.DEFAULT.encode(
@@ -841,6 +857,7 @@ public class CoyoteAdapter implements Adapter {
         // Filter trace method
         if (!connector.getAllowTrace()
                 && req.method().equalsIgnoreCase("TRACE")) {
+            // TRACE 是否允许要根据最终命中的 Wrapper 支持的方法列表来决定。
             Wrapper wrapper = request.getWrapper();
             String header = null;
             if (wrapper != null) {

@@ -100,6 +100,7 @@ final class StandardHostValve extends ValveBase {
         throws IOException, ServletException {
 
         // Host 这一层负责定位具体 Web 应用，也就是 Context。
+        // Context 已经由 Mapper 写入 Request.mappingData，这里只是读取并进入对应应用。
         Context context = request.getContext();
         if (context == null) {
             // 没有拿到 context，失败响应
@@ -135,6 +136,7 @@ final class StandardHostValve extends ValveBase {
                 if (!response.isErrorReportRequired()) {
                     // 没有错误情况，则调用 contextValve 继续往下执行
                     context.getPipeline().getFirst().invoke(request, response);
+                    // 执行完后，则说明已经执行了过滤器+servlet.service 方法了
                 }
             } catch (Throwable t) {
                 ExceptionUtils.handleThrowable(t);

@@ -65,7 +65,19 @@ public class Acceptor<U> implements Runnable {
     }
 
 
-    // 接收请求
+    // 接收请求。
+    // 执行链路起点：
+    // Acceptor.run()
+    //   -> endpoint.serverSocketAccept() 阻塞 accept 新连接
+    //   -> endpoint.setSocketOptions(socket) 把连接包装成 SocketWrapper 并注册到 Poller
+    //   -> Poller 发现 OPEN_READ
+    //   -> AbstractEndpoint.processSocket(...)
+    //   -> SocketProcessorBase.run()
+    //   -> NioEndpoint.SocketProcessor.doRun()
+    //   -> ConnectionHandler.process(...)
+    //   -> Http11Processor.service(...)
+    //   -> CoyoteAdapter.service(...)
+    //   -> Mapper.map(...) 匹配到具体 Wrapper/Servlet。
     @Override
     public void run() {
 
@@ -77,6 +89,7 @@ public class Acceptor<U> implements Runnable {
             // Loop until we receive a shutdown command
             while (!stopCalled) {
 
+                // 如果 Connector 被暂停，Acceptor 不能继续 accept 新连接，只能在这里等待恢复或停止。
                 // Loop if endpoint is paused.
                 // There are two likely scenarios here.
                 // The first scenario is that Tomcat is shutting down. In this
@@ -112,6 +125,7 @@ public class Acceptor<U> implements Runnable {
                 if (stopCalled) {
                     break;
                 }
+                // 走到这里说明 endpoint 未暂停，Acceptor 可以继续接收连接。
                 state = AcceptorState.RUNNING;
 
                 try {
@@ -125,6 +139,7 @@ public class Acceptor<U> implements Runnable {
                         continue;
                     }
 
+                    // socket 是一次 TCP 连接的底层通道对象，NIO 场景下实际类型是 SocketChannel。
                     U socket = null;
                     try {
                         // 阻塞等待 endpoint 的连接请求，返回连接通道
@@ -153,6 +168,8 @@ public class Acceptor<U> implements Runnable {
                         // an appropriate processor if successful
                         // 调用 endpoint.setSocketOptions(socket) 处理该请求通道，重点，处理连接，
                         // 封装并添加到 poller.events 中，由 poller 线程来处理
+                        // setSocketOptions() 不是处理 HTTP 请求体，它只是完成非阻塞配置和 Poller 注册；
+                        // 真正解析 HTTP 请求要等 Poller 监听到可读事件后再触发。
                         if (!endpoint.setSocketOptions(socket)) {
                             // 如果请求处理后返回 false，则关闭这个通道
                             endpoint.closeSocket(socket);

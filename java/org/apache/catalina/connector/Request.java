@@ -592,6 +592,7 @@ public class Request implements HttpServletRequest {
      * @return the Context mapped with the request
      */
     public Context getContext() {
+        // Context 不是在这里算出来的；这里只是读取 Mapper 已经写好的结果。
         return mappingData.context;
     }
 
@@ -634,12 +635,15 @@ public class Request implements HttpServletRequest {
      * @return the Host within which this Request is being processed.
      */
     public Host getHost() {
+        // Host 同样来自 Mapper.map(...) 写入的 mappingData。
         return mappingData.host;
     }
 
 
     /**
-     * Mapping data.
+     * 当前请求对应的容器映射结果。
+     * CoyoteAdapter 调用 Mapper.map(...) 后，会把 host/context/wrapper
+     * 以及 requestPath/pathInfo 等解析结果都填到这里。
      */
     protected final MappingData mappingData = new MappingData();
     private final ApplicationMapping applicationMapping = new ApplicationMapping(mappingData);
@@ -751,6 +755,7 @@ public class Request implements HttpServletRequest {
      * @return the Wrapper within which this Request is being processed.
      */
     public Wrapper getWrapper() {
+        // Wrapper 是最终命中的 Servlet 定义；这里只做读取，不做匹配。
         return mappingData.wrapper;
     }
 

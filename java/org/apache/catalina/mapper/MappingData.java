@@ -24,12 +24,15 @@ import org.apache.catalina.Wrapper;
 import org.apache.tomcat.util.buf.MessageBytes;
 
 /**
- * Mapping data.
+ * 一次请求映射的结果容器。
+ * Mapper 在运行期只负责把“命中的 host/context/wrapper 和附带路径信息”
+ * 写到这里；Request / ApplicationMapping 等对象再从这里读取结果。
  *
  * @author Remy Maucherat
  */
 public class MappingData {
 
+    // host -> context -> wrapper 三段匹配的最终结果都会落在这几个字段里。
     public Host host = null;
     public Context context = null;
     public int contextSlashCount = 0;
@@ -48,7 +51,7 @@ public class MappingData {
 
     public final MessageBytes redirectPath = MessageBytes.newInstance();
 
-    // Fields used by ApplicationMapping to implement javax.servlet.http.HttpServletMapping
+    // 给 HttpServletMapping 暴露“本次是 EXACT / PATH / EXTENSION / DEFAULT 哪种命中”。
     public MappingMatch matchType = null;
 
     public void recycle() {

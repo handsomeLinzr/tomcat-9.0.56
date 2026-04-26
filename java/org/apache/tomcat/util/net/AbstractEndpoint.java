@@ -1163,7 +1163,8 @@ public abstract class AbstractEndpoint<S,U> {
 
     // ---------------------------------------------- Request processing methods
 
-    // 根据给定的 SocketWrapper 和 给的状态，进行处理
+    // 根据给定的 SocketWrapper 和事件状态，触发后续处理。
+    // 在 NIO 主链路里，Poller.processKey() 发现 OPEN_READ 后会调用到这里。
     /**
      * Process the given SocketWrapper with the given status. Used to trigger
      * processing as if the Poller (for those endpoints that have one)
@@ -1185,6 +1186,7 @@ public abstract class AbstractEndpoint<S,U> {
             }
 
             // 用了 processorCache 缓存，避免了重复创建和 gc 回收的开销
+            // SocketProcessorBase 是一次 socket 事件的 Runnable 任务。
             SocketProcessorBase<S> sc = null;
             if (processorCache != null) {
                 // 有缓存先拿缓存，用 pop 是为了极致压缩性能，因为这个对象可能当前刚用完又马上拿出去，行缓存的优势，减少内存寻址的时间
@@ -1198,9 +1200,10 @@ public abstract class AbstractEndpoint<S,U> {
                 sc.reset(socketWrapper, event);
             }
             // 获取当前 endpoint 的 worker 线程池
+            // Executor 通常是 Connector 的工作线程池。
             Executor executor = getExecutor();
             if (dispatch && executor != null) {
-                // 调用 executor 执行这个 SocketProcessor 任务过程
+                // dispatch=true 时把任务切到工作线程，避免 Poller 线程被业务请求阻塞。
                 executor.execute(sc);
             } else {
                 // 否则直接当前线程运行
@@ -1532,4 +1535,3 @@ public abstract class AbstractEndpoint<S,U> {
      */
     protected abstract void destroySocket(U socket);
 }
-

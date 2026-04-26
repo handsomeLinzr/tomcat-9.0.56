@@ -249,6 +249,8 @@ public class Http11Processor extends AbstractProcessor {
     @Override
     public SocketState service(SocketWrapperBase<?> socketWrapper)
         throws IOException {
+        // HTTP/1.1 Processor 的主处理方法。
+        // 前面网络层只知道“socket 可读”，从这里开始才真正解析 HTTP 请求行、请求头。
         // 获取请求信息
         RequestInfo rp = request.getRequestProcessor();
         rp.setStage(org.apache.coyote.Constants.STAGE_PARSE);
@@ -270,6 +272,7 @@ public class Http11Processor extends AbstractProcessor {
 
             // 第一步：解析请求行和请求头。
             try {
+                // parseRequestLine() 会解析 method、requestURI、protocol 等请求行字段。
                 if (!inputBuffer.parseRequestLine(keptAlive, protocol.getConnectionTimeout(),
                         protocol.getKeepAliveTimeout())) {
                     if (inputBuffer.getParsingRequestLinePhase() == -1) {
@@ -292,6 +295,8 @@ public class Http11Processor extends AbstractProcessor {
                     // Header 限制可能运行期通过 JMX 改掉，所以每次请求都重新设置。
                     request.getMimeHeaders().setLimit(protocol.getMaxHeaderCount());
                     // Don't parse headers for HTTP/0.9
+                    // parseHeaders() 会解析 Host、Cookie、Content-Length 等请求头，
+                    // 后续 CoyoteAdapter.postParseRequest() 会使用 Host 和 URI 做容器映射。
                     if (!http09 && !inputBuffer.parseHeaders()) {
                         // We've read part of the request, don't recycle it
                         // instead associate it with the socket
@@ -383,7 +388,7 @@ public class Http11Processor extends AbstractProcessor {
             if (getErrorState().isIoAllowed()) {
                 try {
                     rp.setStage(org.apache.coyote.Constants.STAGE_SERVICE);
-                    // 调用 CoyoteAdapter.service，开始进入容器
+                    // 调用 CoyoteAdapter.service，开始从 Coyote 协议层进入 Catalina 容器层。
                     getAdapter().service(request, response);
                     // Handle when the response was committed before a serious
                     // error occurred.  Throwing a ServletException should both
@@ -563,6 +568,7 @@ public class Http11Processor extends AbstractProcessor {
     }
 
 
+    // 请求协议
     private void prepareRequestProtocol() {
 
         MessageBytes protocolMB = request.protocol();

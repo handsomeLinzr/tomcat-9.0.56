@@ -115,8 +115,9 @@ public class MapperListener extends LifecycleMBeanBase
         for (Container conHost : conHosts) {
             Host host = (Host) conHost;
             if (!LifecycleState.NEW.equals(host.getState())) {
-                // 注册 host/context/wrapper
-                // Registering the host will register the context and wrappers
+                // 先把“静态映射表”建好：注册 host 时会递归把下面的 context / wrapper
+                // 一并注册到 Mapper 内部的有序数组中。后续请求来了以后，
+                // Mapper.map(...) 只做查表，不再去遍历容器树找匹配。
                 registerHost(host);
             }
         }
@@ -404,7 +405,8 @@ public class MapperListener extends LifecycleMBeanBase
             }
         }
 
-        // 添加对应的 wrapper
+        // 这里把一个 ContextVersion 连同它下面所有 wrapper 映射一次性塞进 Mapper。
+        // 也就是说，运行期的“context 命中后如何找 wrapper”，依赖的就是这里准备好的数据结构。
         mapper.addContextVersion(host.getName(), host, contextPath,
                 context.getWebappVersion(), context, welcomeFiles, resources,
                 wrappers);
@@ -462,6 +464,7 @@ public class MapperListener extends LifecycleMBeanBase
 
         List<WrapperMappingInfo> wrappers = new ArrayList<>();
         prepareWrapperMappingInfo(context, wrapper, wrappers);
+        // 动态新增 servlet / url-pattern 时，增量更新 Mapper 中当前 context 的 wrapper 表。
         mapper.addWrappers(hostName, contextPath, version, wrappers);
 
         if(log.isDebugEnabled()) {
@@ -484,7 +487,9 @@ public class MapperListener extends LifecycleMBeanBase
         for (String mapping : mappings) {
             boolean jspWildCard = (wrapperName.equals("jsp")
                                    && mapping.endsWith("/*"));
-            // wrappers 中添加 WrapperMappingInfo 映射信息
+            // 一个 Wrapper 可能对应多个 url-pattern，这里会拆成多条映射规则。
+            // 之后 Mapper.addWrapper(...) 会再按规则类型分流到
+            // exact / wildcard / extension / default 这几张表里。
             wrappers.add(new WrapperMappingInfo(mapping, wrapper, jspWildCard,
                     resourceOnly));
         }

@@ -35,9 +35,11 @@ public abstract class SocketProcessorBase<S> implements Runnable {
     }
 
 
-    // 处理 socket 事件
+    // 处理 socket 事件。
+    // 这里是工作线程执行 Runnable 的统一入口，具体 Endpoint 的处理逻辑在 doRun()。
     @Override
     public final void run() {
+        // 同一个 socket 可能同时出现读/写事件，这里用 wrapper 锁保证同一连接不会并发执行两条处理链。
         synchronized (socketWrapper) {
             // It is possible that processing may be triggered for read and
             // write at the same time. The sync above makes sure that processing
@@ -48,7 +50,7 @@ public abstract class SocketProcessorBase<S> implements Runnable {
                 // 如果已经关闭，则直接返回
                 return;
             }
-            // 运行逻辑
+            // 运行具体 Endpoint 的逻辑。NIO 场景下会进入 NioEndpoint.SocketProcessor.doRun()。
             doRun();
         }
     }

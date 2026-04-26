@@ -477,7 +477,8 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
     }
 
 
-    // 处理对应的连接
+    // 处理 Acceptor 刚刚 accept 到的连接。
+    // 这一段仍然属于“连接接入”阶段，只负责把 SocketChannel 包成 Tomcat 内部对象并注册给 Poller。
     /**
      * Process the specified connection.
      * @param socket The socket channel
@@ -487,11 +488,13 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
      */
     @Override
     protected boolean setSocketOptions(SocketChannel socket) {
+        // socketWrapper 在成功创建后会成为后续链路贯穿到底的连接包装对象。
         NioSocketWrapper socketWrapper = null;
         try {
             // Allocate channel and wrapper
             NioChannel channel = null;
             if (nioChannels != null) {
+                // 复用 NioChannel，减少连接高峰时的对象创建和 GC 压力。
                 channel = nioChannels.pop();
             }
             if (channel == null) {
@@ -510,7 +513,9 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
                 }
             }
             // 创建一个 nioSocket 包装
+            // NioSocketWrapper = NioChannel + Endpoint 的组合封装，后续 Processor 只和 wrapper 交互。
             NioSocketWrapper newWrapper = new NioSocketWrapper(channel, this);
+            // 把刚 accept 的 SocketChannel 绑定进 NioChannel，同时让 NioChannel 能反查 wrapper。
             channel.reset(socket, newWrapper);
             // 将连接放入 connections 中
             connections.put(socket, newWrapper);
@@ -532,6 +537,8 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
             socketWrapper.setKeepAliveLeft(NioEndpoint.this.getMaxKeepAliveRequests());
             // 将将连接 socket 包装注册到了 poller 这个处理中
             // 后续通过 poller 处理这个 socket 的读写请求
+            // 注册到 Poller 后，当前 Acceptor 线程的任务就结束了；
+            // 之后由 Poller 线程监听 OP_READ，再把请求分派到工作线程。
             poller.register(socketWrapper);
             // 返回 true，表示连接正常接受处理
             return true;
@@ -571,7 +578,8 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
     }
 
 
-    // 等待获取 socket 连接请求，返回连接通道
+    // 等待获取 socket 连接请求，返回连接通道。
+    // 这是从操作系统 accept 队列取连接的地方，会阻塞直到有客户端连接进来。
     @Override
     protected SocketChannel serverSocketAccept() throws Exception {
         // 等待接收连接请求，阻塞等待连接
@@ -856,9 +864,10 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
                 boolean hasEvents = false;
 
                 try {
-                    if (!close) {
+            if (!close) {
                         // 如果未关闭，则尝试从已经通过 acceptor 接收到的 channel 包装的事件中
                         // 返回 hasEvents 表示当前是否有事件
+                        // 先处理 Acceptor 或其他线程塞进来的注册事件，例如 poller.register(socketWrapper)。
                         hasEvents = events();
                         // 将 wakeupCounter 设置成 -1，同时判断旧值是否大于0，如果大于0，则说明有事件
                         if (wakeupCounter.getAndSet(-1) > 0) {
@@ -895,7 +904,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
                     continue;
                 }
 
-                // 获取selectionKey的迭代器
+                // 获取 SelectionKey 的迭代器；每个 key 都代表一个已经就绪的 socket 事件。
                 Iterator<SelectionKey> iterator =
                     keyCount > 0 ? selector.selectedKeys().iterator() : null;
                 // Walk through the collection of ready keys and dispatch
@@ -1790,6 +1799,8 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
 
         @Override
         protected void doRun() {
+            // 工作线程真正开始处理一个 socket 事件。
+            // 对普通 HTTP 请求，event 通常是 OPEN_READ，后续会进入 HTTP/1.1 Processor。
             /*
              * Do not cache and re-use the value of socketWrapper.getSocket() in
              * this method. If the socket closes the value will be updated to
@@ -1807,6 +1818,10 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
             }
 
             try {
+                // handshake 用来表示 TLS 握手结果：
+                // 0 表示握手完成，可以处理 HTTP；
+                // -1 表示握手失败，要关闭连接；
+                // OP_READ/OP_WRITE 表示还需要继续监听对应事件。
                 int handshake = -1;
                 try {
                     if (socketWrapper.getSocket().isHandshakeComplete()) {
@@ -1842,14 +1857,17 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
                 }
                 if (handshake == 0) {
                     // 握手成功结束
+                    // SocketState 是 Processor 返回给 Endpoint 的连接状态，决定 keep-alive、异步或关闭。
                     SocketState state = SocketState.OPEN;
                     // Process the request from this socket
                     if (event == null) {
                         // 没有event，默认处理读事件
+                        // 默认按读事件处理，会进入 AbstractProtocol.ConnectionHandler.process()。
                         state = getHandler().process(socketWrapper, SocketEvent.OPEN_READ);
                     } else {
                         // 否则根据event处理
                         // 这里真正处理读写
+                        // 对请求进入 Servlet 的主链路而言，关键事件是 OPEN_READ。
                         state = getHandler().process(socketWrapper, event);
                     }
                     if (state == SocketState.CLOSED) {

@@ -617,6 +617,7 @@ public abstract class HttpServlet extends GenericServlet {
     }
 
 
+    // 默认的 servlet 的 service 方法
     /**
      * Receives standard HTTP requests from the public
      * <code>service</code> method and dispatches
@@ -647,6 +648,7 @@ public abstract class HttpServlet extends GenericServlet {
 
         String method = req.getMethod();
 
+        // GET 方法
         if (method.equals(METHOD_GET)) {
             long lastModified = getLastModified(req);
             if (lastModified == -1) {
@@ -678,6 +680,7 @@ public abstract class HttpServlet extends GenericServlet {
             doHead(req, resp);
 
         } else if (method.equals(METHOD_POST)) {
+            // POST 方法
             doPost(req, resp);
 
         } else if (method.equals(METHOD_PUT)) {

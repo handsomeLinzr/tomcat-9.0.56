@@ -75,6 +75,7 @@ final class StandardContextValve extends ValveBase {
         }
 
         // Context 已确定后，这里负责选中最终 Wrapper，也就是 Servlet 定义。
+        // Wrapper 也是 Mapper.map(...) 的结果，不是在这里重新查找。
         Wrapper wrapper = request.getWrapper();
         if (wrapper == null || wrapper.isUnavailable()) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
@@ -95,7 +96,7 @@ final class StandardContextValve extends ValveBase {
         if (request.isAsyncSupported()) {
             request.setAsyncSupported(wrapper.getPipeline().isAsyncSupported());
         }
-        // 继续向下交给 Wrapper pipeline。
+        // 继续向下交给 Wrapper pipeline，默认会进入 StandardWrapperValve。
         wrapper.getPipeline().getFirst().invoke(request, response);
     }
 }

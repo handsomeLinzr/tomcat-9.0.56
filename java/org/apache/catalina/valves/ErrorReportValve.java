@@ -92,6 +92,7 @@ public class ErrorReportValve extends ValveBase {
         // Perform the request
         getNext().invoke(request, response);
 
+        // 判断是否 response 已经完成
         if (response.isCommitted()) {
             if (response.setErrorReported()) {
                 // Error wasn't previously reported but we can't write an error
@@ -240,6 +241,8 @@ public class ErrorReportValve extends ValveBase {
 
         StringBuilder sb = new StringBuilder();
 
+        // 错误页面
+        // 返回默认的 tomcat 错误页面
         sb.append("<!doctype html><html lang=\"");
         sb.append(smClient.getLocale().getLanguage()).append("\">");
         sb.append("<head>");

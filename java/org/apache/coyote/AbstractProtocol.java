@@ -807,7 +807,8 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         }
 
 
-        // 链接处理过程
+        // 连接处理过程。
+        // NioEndpoint.SocketProcessor.doRun() 会调用这里，把网络层事件交给协议层 Processor。
         @SuppressWarnings("deprecation")
         @Override
         public SocketState process(SocketWrapperBase<S> wrapper, SocketEvent status) {
@@ -823,6 +824,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
             // 获取连接的客户端socket
             S socket = wrapper.getSocket();
 
+            // 一个 socket 在 keep-alive、异步、升级等场景下可能已经绑定过 Processor。
             Processor processor = (Processor) wrapper.getCurrentProcessor();
             if (getLog().isDebugEnabled()) {
                 getLog().debug(sm.getString("abstractConnectionHandler.connectionsGet",
@@ -855,6 +857,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
             try {
                 if (processor == null) {
+                    // 新连接或 keep-alive 新请求第一次进来时通常没有 Processor，需要创建或复用。
                     String negotiatedProtocol = wrapper.getNegotiatedProtocol();
                     // OpenSSL typically returns null whereas JSSE typically
                     // returns "" when no protocol is negotiated
@@ -900,8 +903,8 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                     }
                 }
                 if (processor == null) {
-                    // 如果没有
-                    // 创建一个 Http11Processor
+                    // 如果缓存也没有，就由具体协议创建 Processor。
+                    // HTTP/1.1 NIO 场景下这里创建的是 Http11Processor。
                     processor = getProtocol().createProcessor();
                     // 注册
                     register(processor);
@@ -914,13 +917,15 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 processor.setSslSupport(
                         wrapper.getSslSupport(getProtocol().getClientCertProvider()));
 
-                // 将处理器和连接相互关联
+                // 将处理器和连接相互关联。
+                // 后续同一连接上的异步/升级/keep-alive 状态，都通过这个关联找回 Processor。
                 // Associate the processor with the connection
                 wrapper.setCurrentProcessor(processor);
 
                 SocketState state = SocketState.CLOSED;
                 do {
                     // 处理socket事件
+                    // HTTP/1.1 主链路从这里进入 Http11Processor.service()。
                     state = processor.process(wrapper, status);
 
                     if (state == SocketState.UPGRADING) {
@@ -998,6 +1003,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 } else if (state == SocketState.OPEN) {
                     // In keep-alive but between requests. OK to recycle
                     // processor. Continue to poll for the next request.
+                    // 请求处理结束但连接保持打开：释放 Processor，并重新注册读事件等待下一个请求。
                     wrapper.setCurrentProcessor(null);
                     release(processor);
                     wrapper.registerReadInterest();

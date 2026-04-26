@@ -94,6 +94,7 @@ final class StandardWrapperValve extends ValveBase {
         // This should be a Request attribute...
         long t1=System.currentTimeMillis();
         requestCount.incrementAndGet();
+        // 当前 Valve 挂在 StandardWrapper 上，getContainer() 就是前面 Mapper 命中的目标 Wrapper。
         StandardWrapper wrapper = (StandardWrapper) getContainer();
         Servlet servlet = null;
         Context context = (Context) wrapper.getParent();
@@ -126,7 +127,7 @@ final class StandardWrapperValve extends ValveBase {
         // 分配 Servlet 实例。单实例 Servlet 一般会返回容器缓存的那个实例。
         try {
             if (!unavailable) {
-                // 得到对应的 servlet
+                // 得到对应的 servlet。首次访问可能触发 loadServlet()、init()，后续通常直接复用实例。
                 servlet = wrapper.allocate();
             }
         } catch (UnavailableException e) {
@@ -167,6 +168,7 @@ final class StandardWrapperValve extends ValveBase {
         request.setAttribute(Globals.DISPATCHER_REQUEST_PATH_ATTR,
                 requestPathMB);
         // 根据请求和目标 Wrapper 组装过滤器链。
+        // 过滤器匹配依赖 requestPath、dispatcherType 和 servletName。
         ApplicationFilterChain filterChain =
                 ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
 
@@ -181,7 +183,8 @@ final class StandardWrapperValve extends ValveBase {
                         if (request.isAsyncDispatching()) {
                             request.getAsyncContextInternal().doInternalDispatch();
                         } else {
-                            // 过滤器执行
+                            // 过滤器执行，这里调用 doFilter
+                            // todo 这里就是入口
                             filterChain.doFilter(request.getRequest(),
                                     response.getResponse());
                         }
@@ -256,12 +259,14 @@ final class StandardWrapperValve extends ValveBase {
             // Release the filter chain (if any) for this request
             if (filterChain != null) {
                 // 释放过滤器
+                // 所以一次请求就构建一个过滤器链
                 filterChain.release();
             }
 
             // Deallocate the allocated servlet instance
             try {
                 if (servlet != null) {
+                    // 单线程模型才需要进行释放，默认是 false
                     wrapper.deallocate(servlet);
                 }
             } catch (Throwable e) {
@@ -278,6 +283,7 @@ final class StandardWrapperValve extends ValveBase {
             // unload it and release this instance
             try {
                 if ((servlet != null) &&
+                    // 如果当前 servlet 的可用时间点是 Long.MAX_VALUE，则表示这个 servlet 已经不可用，则卸载
                     (wrapper.getAvailable() == Long.MAX_VALUE)) {
                     wrapper.unload();
                 }

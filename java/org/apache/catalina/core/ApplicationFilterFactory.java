@@ -39,6 +39,7 @@ public final class ApplicationFilterFactory {
     }
 
 
+    // 创建过滤器链
     /**
      * Construct a FilterChain implementation that will wrap the execution of
      * the specified servlet instance.
@@ -77,7 +78,7 @@ public final class ApplicationFilterFactory {
             filterChain = new ApplicationFilterChain();
         }
 
-        // 设置 servlet
+        // 设置最终要调用的 servlet；FilterChain 走到底时会调用它的 service()。
         filterChain.setServlet(servlet);
         filterChain.setServletSupportsAsync(wrapper.isAsyncSupported());
 
@@ -100,8 +101,10 @@ public final class ApplicationFilterFactory {
             requestPath = attribute.toString();
         }
 
+        // servletName 来自最终命中的 Wrapper，用于按 <servlet-name> 配置匹配 Filter。
         String servletName = wrapper.getName();
 
+        // 路径匹配
         // Add the relevant path-mapped filters to this filter chain
         for (FilterMap filterMap : filterMaps) {
             if (!matchDispatcher(filterMap, dispatcher)) {
@@ -110,15 +113,18 @@ public final class ApplicationFilterFactory {
             if (!matchFiltersURL(filterMap, requestPath)) {
                 continue;
             }
+            // 获取对应的过滤器
             ApplicationFilterConfig filterConfig = (ApplicationFilterConfig)
                     context.findFilterConfig(filterMap.getFilterName());
             if (filterConfig == null) {
                 // FIXME - log configuration problem
                 continue;
             }
+            // 添加过滤器
             filterChain.addFilter(filterConfig);
         }
 
+        // servlet 匹配
         // Add filters that match on servlet name second
         for (FilterMap filterMap : filterMaps) {
             if (!matchDispatcher(filterMap, dispatcher)) {
@@ -144,6 +150,7 @@ public final class ApplicationFilterFactory {
     // -------------------------------------------------------- Private Methods
 
 
+    // 判断过滤器是否符合请求的路径
     /**
      * Return <code>true</code> if the context-relative request path
      * matches the requirements of the specified filter mapping;
@@ -164,10 +171,12 @@ public final class ApplicationFilterFactory {
             return false;
         }
 
+        // 获取 url 匹配规则
         // Match on context relative request path
         String[] testPaths = filterMap.getURLPatterns();
 
         for (String testPath : testPaths) {
+            // 逐一判断是否符合匹配
             if (matchFiltersURL(testPath, requestPath)) {
                 return true;
             }
@@ -193,19 +202,24 @@ public final class ApplicationFilterFactory {
             return false;
         }
 
+        // 精准匹配
         // Case 1 - Exact Match
         if (testPath.equals(requestPath)) {
             return true;
         }
 
+        // 全局匹配
         // Case 2 - Path Match ("/.../*")
         if (testPath.equals("/*")) {
             return true;
         }
+        // 前缀匹配
         if (testPath.endsWith("/*")) {
+            // 获取 /* 前边的部分，判断是否匹配
             if (testPath.regionMatches(0, requestPath, 0,
                                        testPath.length() - 2)) {
                 if (requestPath.length() == (testPath.length() - 2)) {
+                    // 前边没了，匹配成功
                     return true;
                 } else if ('/' == requestPath.charAt(testPath.length() - 2)) {
                     return true;
@@ -214,6 +228,7 @@ public final class ApplicationFilterFactory {
             return false;
         }
 
+        // 扩展名匹配
         // Case 3 - Extension Match
         if (testPath.startsWith("*.")) {
             int slash = requestPath.lastIndexOf('/');

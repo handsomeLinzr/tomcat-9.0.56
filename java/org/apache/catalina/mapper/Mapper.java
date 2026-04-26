@@ -289,6 +289,8 @@ public final class Mapper {
         }
         int slashCount = slashCount(path);
         synchronized (mappedHost) {
+            // 一个 ContextVersion 持有“这个 webapp 版本下可用于匹配 wrapper 的全部表”。
+            // 请求命中到某个 contextPath 后，后续 wrapper 查找就完全基于这个对象。
             ContextVersion newContextVersion = new ContextVersion(version,
                     path, slashCount, context, resources, welcomeResources);
             if (wrappers != null) {
@@ -473,6 +475,8 @@ public final class Mapper {
             Wrapper wrapper, boolean jspWildCard, boolean resourceOnly) {
 
         synchronized (context) {
+            // 注册阶段先把 url-pattern 按类型拆开存好，
+            // 运行期 internalMapWrapper() 就能严格按 Servlet 规范顺序直接查对应数组。
             if (path.endsWith("/*")) {
                 // Wildcard wrapper
                 String name = path.substring(0, path.length() - 2);
@@ -685,6 +689,8 @@ public final class Mapper {
     }
 
 
+    // 运行期请求映射的总入口：根据 host + uri 查表，并把结果写入 MappingData。
+    // 调用方通常是 CoyoteAdapter.postParseRequest()。
     /**
      * Map the specified host name and URI, mutating the given mapping data.
      *
@@ -708,7 +714,7 @@ public final class Mapper {
         }
         host.toChars();
         uri.toChars();
-        // 匹配 context
+        // internalMap 会完成整条链路：host -> context -> wrapper。
         internalMap(host.getCharChunk(), uri.getCharChunk(), version, mappingData);
     }
 
@@ -755,10 +761,15 @@ public final class Mapper {
             throw new AssertionError();
         }
 
-        // Virtual host mapping
+        // 第 1 段：按请求中的 server name 命中 Host。
+        // 顺序是：精确 host -> 通配 host(通过去掉第一个子域名实现) -> defaultHost。
+        // hosts/contexts/wrappers 这些数组都在启动期或运行期注册阶段预构建好，
+        // 这里完全是只读查表，所以运行期映射速度很快。
         MappedHost[] hosts = this.hosts;
+        // 根据 host，从 hosts 中获取到匹配的 MappedHost
         MappedHost mappedHost = exactFindIgnoreCase(hosts, host);
         if (mappedHost == null) {
+            // 没有找到完全一样匹配的 host，则去掉第一个子域（只拿. 后边的）
             // Note: Internally, the Mapper does not use the leading * on a
             //       wildcard host. This is to allow this shortcut.
             int firstDot = host.indexOf('.');
@@ -766,34 +777,42 @@ public final class Mapper {
                 int offset = host.getOffset();
                 try {
                     host.setOffset(firstDot + offset);
+                    // 去掉以一个子域，也就是第一个点前边的部分，再去做匹配
                     mappedHost = exactFindIgnoreCase(hosts, host);
                 } finally {
+                    // 还原
                     // Make absolutely sure this gets reset
                     host.setOffset(offset);
                 }
             }
             if (mappedHost == null) {
+                // 匹配不到，则设置默认 host
                 mappedHost = defaultHost;
                 if (mappedHost == null) {
                     return;
                 }
             }
         }
+        // 找到 Host 后先记到 mappingData，后续 EngineValve 会直接 request.getHost() 读取这里。
         mappingData.host = mappedHost.object;
 
         if (uri.isNull()) {
-            // Can't map context or wrapper without a uri
+            // 没有 URI 时只能确认 Host，后面的 context / wrapper 无法继续匹配。
             return;
         }
 
         uri.setLimit(-1);
 
-        // Context mapping
+        // 第 2 段：按 URI 命中 Context。
+        // 这里不是简单“从前往后遍历”，而是先在有序数组里二分定位，
+        // 再不断回退到更短的前缀，直到找到“最长且满足 / 边界”的 context path。
         ContextList contextList = mappedHost.contextList;
+        // 当前 host 下的所有 context
         MappedContext[] contexts = contextList.contexts;
-        // 根据uri匹配
+        // 查询和 uri 匹配的位置
         int pos = find(contexts, uri);
         if (pos == -1) {
+            // 没找到
             return;
         }
 
@@ -803,7 +822,9 @@ public final class Mapper {
         boolean found = false;
         MappedContext context = null;
         while (pos >= 0) {
+            // 拿到对应的 context
             context = contexts[pos];
+            // 查看是否uri匹配
             if (uri.startsWith(context.name)) {
                 length = context.name.length();
                 if (uri.getLength() == length) {
@@ -835,12 +856,15 @@ public final class Mapper {
             return;
         }
 
+        // 先记录命中的 contextPath，再决定使用哪个 ContextVersion。
         mappingData.contextPath.setString(context.name);
 
         ContextVersion contextVersion = null;
         ContextVersion[] contextVersions = context.versions;
         final int versionCount = contextVersions.length;
         if (versionCount > 1) {
+            // 并行部署场景：同一个 contextPath 下可能挂多个版本。
+            // 这里先把候选 Context 都记录下来，便于外层根据 session 再次重映射。
             Context[] contextObjects = new Context[contextVersions.length];
             for (int i = 0; i < contextObjects.length; i++) {
                 contextObjects[i] = contextVersions[i].object;
@@ -851,15 +875,16 @@ public final class Mapper {
             }
         }
         if (contextVersion == null) {
-            // Return the latest version
-            // The versions array is known to contain at least one element
+            // 未指定版本时，默认命中该 contextPath 的最新版本。
             contextVersion = contextVersions[versionCount - 1];
         }
+        // contextVersion.object 就是实际的 StandardContext。
         mappingData.context = contextVersion.object;
         mappingData.contextSlashCount = contextVersion.slashCount;
 
-        // Wrapper mapping
+        // 第 3 段：在已确定的 ContextVersion 内继续匹配 Wrapper。
         if (!contextVersion.isPaused()) {
+            // 匹配 Wrapper
             internalMapWrapper(contextVersion, uri, mappingData);
         }
 
@@ -875,6 +900,8 @@ public final class Mapper {
                                           CharChunk path,
                                           MappingData mappingData) throws IOException {
 
+        // 进入这个方法前 host/context 已经确定。
+        // 这个方法的全部目标，就是按 Servlet 规范选出最终 wrapper，也就是目标 Servlet 定义。
         int pathOffset = path.getOffset();
         int pathEnd = path.getEnd();
         boolean noServletPath = false;
@@ -883,14 +910,19 @@ public final class Mapper {
         if (length == (pathEnd - pathOffset)) {
             noServletPath = true;
         }
+        // 从 pathOffset 加上 context 的长度，都属于前边的部分
+        // 而后边的部分就是需要去匹配 servlet 的部分
         int servletPath = pathOffset + length;
+        // 走到这里 Context 已经确定，所以后续 Wrapper 匹配只看“去掉 contextPath 后”的剩余路径。
         path.setOffset(servletPath);
 
-        // Rule 1 -- Exact Match
+        // Servlet 规范的匹配顺序从这里开始：
+        // 1. 精确匹配 /foo/bar
         MappedWrapper[] exactWrappers = contextVersion.exactWrappers;
+        // 匹配
         internalMapExactWrapper(exactWrappers, path, mappingData);
 
-        // Rule 2 -- Prefix Match
+        // 2. 前缀匹配 /foo/*
         boolean checkJspWelcomeFiles = false;
         MappedWrapper[] wildcardWrappers = contextVersion.wildcardWrappers;
         if (mappingData.wrapper == null) {
@@ -920,6 +952,7 @@ public final class Mapper {
 
         if(mappingData.wrapper == null && noServletPath &&
                 contextVersion.object.getMapperContextRootRedirectEnabled()) {
+            // Context 根路径请求且开启 redirect 时，直接产生重定向，不再继续找 wrapper。
             // The path is empty, redirect to "/"
             path.append('/');
             pathEnd = path.getEnd();
@@ -929,14 +962,14 @@ public final class Mapper {
             return;
         }
 
-        // Rule 3 -- Extension Match
+        // 3. 扩展名匹配 *.jsp / *.do
         MappedWrapper[] extensionWrappers = contextVersion.extensionWrappers;
         if (mappingData.wrapper == null && !checkJspWelcomeFiles) {
             internalMapExtensionWrapper(extensionWrappers, path, mappingData,
                     true);
         }
 
-        // Rule 4 -- Welcome resources processing for servlets
+        // 4. welcome-file 处理。只有前面都没命中，且请求像目录时才会进入。
         if (mappingData.wrapper == null) {
             boolean checkWelcomeFiles = checkJspWelcomeFiles;
             if (!checkWelcomeFiles) {
@@ -1026,7 +1059,7 @@ public final class Mapper {
         }
 
 
-        // Rule 7 -- Default servlet
+        // 7. 兜底的 default servlet。到这里还没命中，基本就落到静态资源默认处理器了。
         if (mappingData.wrapper == null && !checkJspWelcomeFiles) {
             if (contextVersion.defaultWrapper != null) {
                 mappingData.wrapper = contextVersion.defaultWrapper.object;
@@ -1074,24 +1107,29 @@ public final class Mapper {
     }
 
 
+    // 匹配wrapper
     /**
      * Exact mapping.
      */
     @SuppressWarnings("deprecation") // contextPath
     private final void internalMapExactWrapper
         (MappedWrapper[] wrappers, CharChunk path, MappingData mappingData) {
+        // 精确匹配要求 path 与 url-pattern 完全一致。
         MappedWrapper wrapper = exactFind(wrappers, path);
         if (wrapper != null) {
+            // wrapper.object 就是命中的 Wrapper，后面 request.getWrapper() 会直接返回它。
             mappingData.requestPath.setString(wrapper.name);
             mappingData.wrapper = wrapper.object;
             if (path.equals("/")) {
                 // Special handling for Context Root mapped servlet
                 mappingData.pathInfo.setString("/");
                 mappingData.wrapperPath.setString("");
+                // ROOT 匹配
                 // This seems wrong but it is what the spec says...
                 mappingData.contextPath.setString("");
                 mappingData.matchType = MappingMatch.CONTEXT_ROOT;
             } else {
+                // 确切匹配
                 mappingData.wrapperPath.setString(wrapper.name);
                 mappingData.matchType = MappingMatch.EXACT;
             }
@@ -1114,6 +1152,8 @@ public final class Mapper {
         if (pos != -1) {
             boolean found = false;
             while (pos >= 0) {
+                // 这里同样是“先找可能的最长前缀，再逐级回退到上一个 /”。
+                // 所以 /a/b/c 会优先命中 /a/b/*，再退到 /a/*，而不是反过来。
                 if (path.startsWith(wrappers[pos].name)) {
                     length = wrappers[pos].name.length();
                     if (path.getLength() == length) {
@@ -1161,6 +1201,7 @@ public final class Mapper {
      */
     private final void internalMapExtensionWrapper(MappedWrapper[] wrappers,
             CharChunk path, MappingData mappingData, boolean resourceExpected) {
+        // 扩展名匹配只检查最后一个 / 之后的文件名部分，例如 /a/b/test.jsp -> jsp。
         char[] buf = path.getBuffer();
         int pathEnd = path.getEnd();
         int servletPath = path.getOffset();
@@ -1189,6 +1230,7 @@ public final class Mapper {
                             - servletPath);
                     mappingData.requestPath.setChars(buf, servletPath, pathEnd
                             - servletPath);
+                    // 扩展名匹配命中后，同样把最终结果写回 mappingData.wrapper。
                     mappingData.wrapper = wrapper.object;
                     mappingData.matchType = MappingMatch.EXTENSION;
                 }
@@ -1209,6 +1251,7 @@ public final class Mapper {
     }
 
 
+    // 二分查找，找到从 start 到 end，和 name 相匹配的位置
     /**
      * Find a map element given its name in a sorted array of map elements.
      * This will return the index for the closest inferior or equal item in the
@@ -1225,24 +1268,33 @@ public final class Mapper {
             return -1;
         }
 
+        // 比map的第一个还小，则直接返回-1，不在当前范围
         if (compare(name, start, end, map[0].name) < 0 ) {
             return -1;
         }
+        // 如果此时 b=0，则表示map只有一个元素，刚好符合条件，直接返回
         if (b == 0) {
             return 0;
         }
 
+        // 二分查找循环
         int i = 0;
         while (true) {
+            // 获取到 a 和 b 的中间位置
             i = (b + a) >>> 1;
+            // 将中间位置的 context name 和 当前的 name 做比较
             int result = compare(name, start, end, map[i].name);
             if (result == 1) {
+                // a往右挪
                 a = i;
             } else if (result == 0) {
+                // 相等，直接返回
                 return i;
             } else {
+                // b往左挪
                 b = i;
             }
+            // 判断a和b相邻的情况，则直接额外处理
             if ((b - a) == 1) {
                 int result2 = compare(name, start, end, map[b].name);
                 if (result2 < 0) {
@@ -1261,6 +1313,9 @@ public final class Mapper {
      * given array.
      */
     private static final <T> int findIgnoreCase(MapElement<T>[] map, CharChunk name) {
+        // 这个重载使用 CharChunk 当前有效范围作为查找 key。
+        // CharChunk 底层可能复用一个更大的 char[]，所以不能直接拿整个 buffer 比较，
+        // 必须把 start/end 传给真正执行二分查找的方法。
         return findIgnoreCase(map, name, name.getStart(), name.getEnd());
     }
 
@@ -1273,32 +1328,53 @@ public final class Mapper {
     private static final <T> int findIgnoreCase(MapElement<T>[] map, CharChunk name,
                                   int start, int end) {
 
+        // 二分查找的左边界，表示当前已知“小于或等于目标值”的下界候选位置。
         int a = 0;
+        // 二分查找的右边界，初始化为数组最后一个元素。
+        // map 按 MapElement.name 升序排列，这是后续二分查找成立的前提。
         int b = map.length - 1;
 
         // Special cases: -1 and 0
+        // 空数组没有任何候选元素，返回 -1 表示没有“小于或等于目标值”的位置。
         if (b == -1) {
             return -1;
         }
+        // 如果目标值比数组第一个元素还小，数组里不存在小于或等于目标值的元素。
+        // 这里忽略大小写比较，主要用于 Host 名称等大小写不敏感的查找。
         if (compareIgnoreCase(name, start, end, map[0].name) < 0 ) {
             return -1;
         }
+        // 只有一个元素时，前面已经排除了“目标值小于第一个元素”的情况，
+        // 因此第 0 位就是最接近且小于或等于目标值的位置。
         if (b == 0) {
             return 0;
         }
 
+        // 保存本轮二分查找选中的中点位置。
         int i = 0;
         while (true) {
+            // 使用无符号右移除以 2，避免 (a + b) 极端情况下的符号问题。
             i = (b + a) >>> 1;
+            // 比较目标 CharChunk 和中点元素名称，忽略 ASCII 大小写。
+            // 返回 1 表示目标值更大，0 表示相等，-1 表示目标值更小。
             int result = compareIgnoreCase(name, start, end, map[i].name);
             if (result == 1) {
+                // 目标值比中点大，中点及其左侧都不可能是更大的命中点；
+                // 但中点仍可能是“小于或等于目标值”的当前最佳候选。
                 a = i;
             } else if (result == 0) {
+                // 完全相等时直接返回精确命中的下标。
                 return i;
             } else {
+                // 目标值比中点小，答案只能在中点左侧，收缩右边界。
                 b = i;
             }
+            // 当左右边界只差 1 时，搜索区间已经无法继续二分。
+            // 此时只需要判断右边界是否仍然小于或等于目标值。
             if ((b - a) == 1) {
+                // 再比较一次右边界元素：
+                // 如果目标值小于右边界元素，则左边界 a 是最近的下界；
+                // 否则右边界 b 更接近目标值，或者正好等于目标值。
                 int result2 = compareIgnoreCase(name, start, end, map[b].name);
                 if (result2 < 0) {
                     return a;
@@ -1383,8 +1459,10 @@ public final class Mapper {
      */
     private static final <T, E extends MapElement<T>> E exactFind(E[] map,
             CharChunk name) {
+        // 查询对应的 map 中的 servlet
         int pos = find(map, name);
         if (pos >= 0) {
+            // 判断是否完全一致
             E result = map[pos];
             if (name.equals(result.name)) {
                 return result;
@@ -1401,17 +1479,24 @@ public final class Mapper {
      */
     private static final <T, E extends MapElement<T>> E exactFindIgnoreCase(
             E[] map, CharChunk name) {
+        // 先通过忽略大小写的二分查找拿到“最接近且小于或等于目标值”的位置。
+        // 注意 findIgnoreCase 不保证精确命中，它可能返回目标值前面的那个元素。
         int pos = findIgnoreCase(map, name);
         if (pos >= 0) {
+            // 取出候选元素。对于 Host 查找来说，这里通常是 MappedHost 或它的别名。
             E result = map[pos];
+            // 因为上一步只是“下界”查找，所以这里必须再做一次精确判断。
+            // 只要忽略大小写后名称相同，才说明真的找到了目标元素。
             if (name.equalsIgnoreCase(result.name)) {
                 return result;
             }
         }
+        // pos 为 -1，或者候选元素名称不相等，都表示没有精确匹配。
         return null;
     }
 
 
+    // 字符串比较
     /**
      * Compare given char chunk with String.
      * Return -1, 0 or +1 if inferior, equal, or superior to the String.
@@ -1419,12 +1504,16 @@ public final class Mapper {
     private static final int compare(CharChunk name, int start, int end,
                                      String compareTo) {
         int result = 0;
+        // 获取要比较的内容字符
         char[] c = name.getBuffer();
+        // 被比较的字符串长度
         int len = compareTo.length();
         if ((end - start) < len) {
             len = end - start;
         }
+        // 遍历整个字符串的每个字符
         for (int i = 0; (i < len) && (result == 0); i++) {
+            // 如果 c 的字符在 compareTo 前，返回 1，否则返回 -1，知道结果是 0 或者结束
             if (c[i + start] > compareTo.charAt(i)) {
                 result = 1;
             } else if (c[i + start] < compareTo.charAt(i)) {
@@ -1432,6 +1521,7 @@ public final class Mapper {
             }
         }
         if (result == 0) {
+            // compareTo 长度大于 c 的长度，则 compareTo 大，否则 compareTo 小
             if (compareTo.length() > (end - start)) {
                 result = -1;
             } else if (compareTo.length() < (end - start)) {
@@ -1442,32 +1532,44 @@ public final class Mapper {
     }
 
 
+    // 字符串忽略大小写，比较
     /**
      * Compare given char chunk with String ignoring case.
      * Return -1, 0 or +1 if inferior, equal, or superior to the String.
      */
     private static final int compareIgnoreCase(CharChunk name, int start, int end,
                                      String compareTo) {
+        // 比较结果：0 表示目前为止相等，1 表示 name 更大，-1 表示 name 更小。
         int result = 0;
+        // CharChunk 复用底层 char[]，实际参与比较的是 [start, end) 这一段。
         char[] c = name.getBuffer();
+        // 默认比较长度取 compareTo 的长度，后面会和 CharChunk 有效长度取较小值。
         int len = compareTo.length();
         if ((end - start) < len) {
+            // 只逐字符比较双方共有的前缀长度，长度差异留到循环后处理。
             len = end - start;
         }
         for (int i = 0; (i < len) && (result == 0); i++) {
+            // 只做 ASCII 小写转换，符合 Tomcat 对 host 等映射 key 的比较需求。
             if (Ascii.toLower(c[i + start]) > Ascii.toLower(compareTo.charAt(i))) {
+                // 当前字符更大，整个 name 就按字典序排在 compareTo 后面。
                 result = 1;
             } else if (Ascii.toLower(c[i + start]) < Ascii.toLower(compareTo.charAt(i))) {
+                // 当前字符更小，整个 name 就按字典序排在 compareTo 前面。
                 result = -1;
             }
         }
         if (result == 0) {
+            // 共有前缀完全一致时，较长的字符串按字典序更大。
             if (compareTo.length() > (end - start)) {
+                // compareTo 更长，说明 name 是它的前缀，因此 name 更小。
                 result = -1;
             } else if (compareTo.length() < (end - start)) {
+                // name 更长，说明 compareTo 是它的前缀，因此 name 更大。
                 result = 1;
             }
         }
+        // 返回 -1、0、1，供 findIgnoreCase 的二分查找判断搜索方向。
         return result;
     }
 

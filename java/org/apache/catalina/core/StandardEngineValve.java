@@ -44,7 +44,8 @@ final class StandardEngineValve extends ValveBase {
 
     // --------------------------------------------------------- Public Methods
 
-    // 请求处理，从 CoyoteAdapter.service 进来
+    // 请求处理，从 CoyoteAdapter.service 进来。
+    // Mapper 已经把 Host 写入 Request.mappingData，这里只读取并转交给 Host pipeline。
     /**
      * Select the appropriate child Host to process this request,
      * based on the requested server name.  If no matching Host can
@@ -63,6 +64,7 @@ final class StandardEngineValve extends ValveBase {
         // Engine 这一层只负责选中目标 Host。
         Host host = request.getHost();
         if (host == null) {
+            // 找不到 host，就哦吼，404，返回
             // HTTP 0.9 or HTTP 1.0 request without a host when no default host
             // is defined.
             // Don't overwrite an existing error
